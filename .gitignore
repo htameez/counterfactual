@@ -1,0 +1,34 @@
+node_modules/
+.next/
+out/
+dist/
+build/
+.turbo/
+.vercel/
+.netlify/
+.cache/
+coverage/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# OS/editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
