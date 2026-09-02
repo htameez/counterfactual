@@ -58,7 +58,7 @@ export default function FinancialStatePanel({
     setEditingField(null);
   };
 
-  const monthlySavings = state.monthlyTakeHome - state.monthlyLivingExpenses;
+  const monthlySavings = state.monthlySavingsContribution;
   const totalReserves =
     state.emergencyFundMinimum +
     state.graduateSchoolReserve +

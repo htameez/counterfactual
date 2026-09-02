@@ -1,14 +1,18 @@
-import type { WebMCPContextType, WebMCPTool, WebMCPContext } from "@/types";
+import type {
+  ToolAnnotations,
+  ToolInputSchema,
+  WebMCPContextType,
+  WebMCPTool,
+  WebMCPContext,
+} from "@/types";
 
 export interface ToolDefinition {
   name: string;
+  title: string;
   description: string;
-  inputSchema: {
-    type: string;
-    properties: Record<string, unknown>;
-    required?: string[];
-  };
-  handler: (args: unknown) => Promise<unknown> | unknown;
+  inputSchema: ToolInputSchema;
+  annotations: ToolAnnotations;
+  handler: (args: unknown, options?: { signal?: AbortSignal }) => Promise<unknown> | unknown;
 }
 
 /**
@@ -41,7 +45,7 @@ export function getWebMCPContext(): WebMCPContext | null {
 /**
  * Demo Bridge: A local implementation of WebMCP for development/fallback
  */
-export class DemoBridge implements WebMCPContext {
+export class DemoBridge {
   private tools: Map<
     string,
     {
@@ -52,19 +56,23 @@ export class DemoBridge implements WebMCPContext {
 
   async registerTool(
     name: string,
+    title: string,
     description: string,
     inputSchema: unknown,
-    handler: (args: unknown) => Promise<unknown> | unknown
+    annotations: ToolAnnotations,
+    handler: (args: unknown, options?: { signal?: AbortSignal }) => Promise<unknown> | unknown
   ): Promise<void> {
     const definition: ToolDefinition = {
       name,
+      title,
       description,
-      inputSchema: inputSchema as ToolDefinition["inputSchema"],
+      inputSchema: inputSchema as ToolInputSchema,
+      annotations,
       handler,
     };
 
     const asyncHandler = async (args: unknown) => {
-      const result = await handler(args);
+      const result = await handler(args, { signal: new AbortController().signal });
       return result;
     };
 
@@ -82,8 +90,10 @@ export class DemoBridge implements WebMCPContext {
   async discoverTools(): Promise<WebMCPTool[]> {
     return Array.from(this.tools.values()).map((t) => ({
       name: t.definition.name,
+      title: t.definition.title,
       description: t.definition.description,
       inputSchema: t.definition.inputSchema,
+      annotations: t.definition.annotations,
     }));
   }
 
@@ -97,18 +107,18 @@ export class DemoBridge implements WebMCPContext {
  */
 export class WebMCPClient {
   private context: WebMCPContext | null;
-  private bridge: DemoBridge | null;
+  private bridge: DemoBridge;
   private contextType: WebMCPContextType;
   private registeredTools: Set<string> = new Set();
+  private nativeRegistrationController = new AbortController();
 
   constructor() {
     this.context = getWebMCPContext();
     this.contextType = this.context ? detectWebMCPContext() : "unavailable";
-    this.bridge = null;
+    this.bridge = new DemoBridge();
 
     // Use demo bridge if native not available
     if (!this.context) {
-      this.bridge = new DemoBridge();
       this.contextType = "demo-bridge";
     }
   }
@@ -119,9 +129,11 @@ export class WebMCPClient {
 
   async registerTool(
     name: string,
+    title: string,
     description: string,
     inputSchema: unknown,
-    handler: (args: unknown) => Promise<unknown> | unknown
+    annotations: ToolAnnotations,
+    handler: (args: unknown, options?: { signal?: AbortSignal }) => Promise<unknown> | unknown
   ): Promise<void> {
     // Prevent duplicate registration (React Strict Mode safety)
     if (this.registeredTools.has(name)) {
@@ -129,35 +141,68 @@ export class WebMCPClient {
       return;
     }
 
+    await this.bridge.registerTool(
+      name,
+      title,
+      description,
+      inputSchema,
+      annotations,
+      handler
+    );
+
     if (this.context) {
-      await this.context.registerTool(name, description, inputSchema, handler);
-    } else if (this.bridge) {
-      await this.bridge.registerTool(name, description, inputSchema, handler);
-    } else {
-      throw new Error("No WebMCP context available");
+      const modelContextTool: WebMCPTool = {
+        name,
+        title,
+        description,
+        inputSchema: inputSchema as ToolInputSchema,
+        annotations,
+        execute: handler,
+      };
+
+      try {
+        await this.context.registerTool(modelContextTool, {
+          signal: this.nativeRegistrationController.signal,
+        });
+      } catch (objectShapeError) {
+        this.contextType = "demo-bridge";
+        console.warn(
+          `Failed to register native WebMCP tool ${name}; using local demo bridge instead.`,
+          objectShapeError
+        );
+      }
     }
 
     this.registeredTools.add(name);
   }
 
   async invokeTool(name: string, args: unknown): Promise<unknown> {
-    if (this.context) {
-      return this.context.invokeTool(name, args);
-    } else if (this.bridge) {
-      return this.bridge.invokeTool(name, args);
-    } else {
-      throw new Error("No WebMCP context available");
+    try {
+      return await this.bridge.invokeTool(name, args);
+    } catch (bridgeError) {
+      if (!this.context?.executeTool || !this.context?.getTools) {
+        throw bridgeError;
+      }
+      const tools = await this.context.getTools({ fromOrigins: [] });
+      const tool = tools.find((candidate) => candidate.name === name);
+      if (!tool) {
+        throw bridgeError;
+      }
+      return this.context.executeTool(tool, args);
     }
   }
 
   async discoverTools(): Promise<WebMCPTool[]> {
-    if (this.context) {
-      return this.context.discoverTools();
-    } else if (this.bridge) {
-      return this.bridge.discoverTools();
-    } else {
-      return [];
+    const localTools = await this.bridge.discoverTools();
+    if (localTools.length > 0) {
+      return localTools;
     }
+
+    if (this.context?.getTools) {
+      return this.context.getTools({ fromOrigins: [] });
+    }
+
+    return [];
   }
 
   /**
@@ -169,15 +214,13 @@ export class WebMCPClient {
   async unregisterAll(): Promise<void> {
     for (const name of this.registeredTools) {
       try {
-        if (this.context?.unregisterTool) {
-          await this.context.unregisterTool(name);
-        } else if (this.bridge) {
-          await this.bridge.unregisterTool(name);
-        }
+        await this.bridge.unregisterTool(name);
       } catch (error) {
         console.warn(`Failed to unregister tool ${name}:`, error);
       }
     }
+    this.nativeRegistrationController.abort();
+    this.nativeRegistrationController = new AbortController();
     this.registeredTools.clear();
   }
 }

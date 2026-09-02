@@ -1,27 +1,47 @@
 // WebMCP type definitions
 export interface WebMCPTool {
   name: string;
+  title?: string;
   description: string;
-  inputSchema: {
-    type: string;
-    properties: Record<string, unknown>;
-    required?: string[];
-  };
+  inputSchema: ToolInputSchema;
+  annotations?: ToolAnnotations;
+  execute?: (input: unknown, options?: ToolExecuteOptions) => unknown;
+}
+
+export interface RegisteredWebMCPTool extends WebMCPTool {
+  window?: Window;
+  origin?: string;
+  execute?: never;
+}
+
+export interface ToolAnnotations {
+  readOnlyHint?: boolean;
+  untrustedContentHint?: boolean;
+}
+
+export interface ToolExecuteOptions {
+  signal: AbortSignal;
+}
+
+export interface ToolInputSchema {
+  type: "object";
+  description?: string;
+  properties: Record<string, unknown>;
+  required?: string[];
+  additionalProperties?: boolean;
 }
 
 export interface WebMCPContext {
   registerTool: (
-    name: string,
-    description: string,
-    inputSchema: unknown,
-    handler: (args: unknown) => unknown
+    tool: WebMCPTool,
+    options?: { exposedTo?: string[]; signal?: AbortSignal }
   ) => Promise<void>;
-
-  invokeTool: (name: string, args: unknown) => Promise<unknown>;
-  discoverTools: () => Promise<WebMCPTool[]>;
-  // Not part of every WebMCP draft implementation, so callers must check
-  // for it before use ("clean up ... if the API permits it").
-  unregisterTool?: (name: string) => Promise<void> | void;
+  getTools?: (options?: { fromOrigins?: string[] }) => Promise<RegisteredWebMCPTool[]>;
+  executeTool?: (
+    tool: RegisteredWebMCPTool,
+    inputObject?: unknown,
+    options?: { signal?: AbortSignal }
+  ) => Promise<unknown>;
 }
 
 declare global {

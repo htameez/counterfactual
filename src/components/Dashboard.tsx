@@ -1,20 +1,32 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import type { FinancialState, Scenario, FlightRecorderEntry } from "@/types";
+import type {
+  FinancialState,
+  FlightRecorderEntry,
+  Scenario,
+  ToolStatus,
+} from "@/types";
 import {
   DEFAULT_FINANCIAL_STATE,
   SCENARIO_CONFIGS,
   calculateScenario,
 } from "@/lib/financialCalculations";
 import { WebMCPClient } from "@/lib/webmcp";
-import { getToolPolicy } from "@/lib/riskPolicy";
+import {
+  getToolAnnotations,
+  getToolInputSchema,
+  getToolPolicy,
+} from "@/lib/riskPolicy";
 import FinancialStatePanel from "./FinancialStatePanel";
 import ScenarioComparison from "./ScenarioComparison";
 import FlightRecorder from "./FlightRecorder";
 import ConfirmationModal from "./ConfirmationModal";
 import WebMCPStatus from "./WebMCPStatus";
 import AgentControls from "./AgentControls";
+
+type ToolOrigin = "user" | "agent";
+type ToolHandler = (args: unknown, options?: { signal?: AbortSignal }) => Promise<unknown>;
 
 export default function Dashboard() {
   const [financialState, setFinancialState] =
@@ -40,6 +52,8 @@ export default function Dashboard() {
     scenariosRef.current = scenarios;
   }, [scenarios]);
 
+  const toolHandlersRef = useRef<Record<string, ToolHandler>>({});
+
   const updateScenarios = useCallback((state: FinancialState) => {
     const updated = SCENARIO_CONFIGS.map((config) => {
       const calculation = calculateScenario(
@@ -56,15 +70,88 @@ export default function Dashboard() {
     setScenarios(updated);
   }, []);
 
+  const addFlightLogEntry = useCallback(
+    (
+      toolName: string,
+      toolArgs: Record<string, unknown>,
+      origin: ToolOrigin
+    ) => {
+      const policy = getToolPolicy(toolName);
+      const entry: FlightRecorderEntry = {
+        id: `entry-${Date.now()}-${Math.random()}`,
+        toolName,
+        toolArgs,
+        riskClassification: policy?.riskLevel || "read-only",
+        timestamp: new Date(),
+        status: "Discovered",
+        origin,
+      };
+      setFlightLog((prev) => [entry, ...prev]);
+      return entry;
+    },
+    []
+  );
+
+  const updateFlightLogEntry = useCallback(
+    (entryId: string, updates: Partial<FlightRecorderEntry>) => {
+      setFlightLog((prev) =>
+        prev.map((entry) =>
+          entry.id === entryId ? { ...entry, ...updates } : entry
+        )
+      );
+    },
+    []
+  );
+
+  const executeToolWithRecorder = useCallback(
+    async (
+      toolName: string,
+      args: unknown,
+      origin: ToolOrigin,
+      handler: ToolHandler,
+      options?: { signal?: AbortSignal }
+    ) => {
+      const toolArgs =
+        typeof args === "object" && args !== null && !Array.isArray(args)
+          ? (args as Record<string, unknown>)
+          : {};
+      const entry = addFlightLogEntry(toolName, toolArgs, origin);
+
+      try {
+        const result = await handler(args, options);
+        const status: ToolStatus =
+          toolName === "simulate_purchase"
+            ? "Simulated"
+            : toolName === "commit_scenario"
+              ? "Awaiting Approval"
+              : "Executed";
+        const completedEntry = { ...entry, status, result };
+
+        updateFlightLogEntry(entry.id, completedEntry);
+        if (status === "Awaiting Approval") {
+          setPendingApproval(completedEntry);
+        }
+
+        return result;
+      } catch (error) {
+        updateFlightLogEntry(entry.id, {
+          status: "Failed",
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+    },
+    [addFlightLogEntry, updateFlightLogEntry]
+  );
+
   // Register WebMCP tools once. Handlers read/write through refs and state
   // setters so they always operate on the *current* state, even though the
   // handler closures themselves are created only a single time.
   const initializeWebMCP = useCallback(async () => {
     const client = new WebMCPClient();
-    setWebMCPClient(client);
 
     // Register all tools
-    const handlers = {
+    const handlers: Record<string, ToolHandler> = {
       get_financial_state: async () => {
         return {
           ...financialStateRef.current,
@@ -195,17 +282,28 @@ export default function Dashboard() {
         };
       },
     };
+    toolHandlersRef.current = handlers;
 
     // Register each tool
     for (const [toolName, handler] of Object.entries(handlers)) {
       const policy = getToolPolicy(toolName);
-      if (policy) {
+      const inputSchema = getToolInputSchema(toolName);
+      if (policy && inputSchema) {
         try {
           await client.registerTool(
             toolName,
+            policy.name,
             policy.description,
-            policy,
-            handler
+            inputSchema,
+            getToolAnnotations(toolName),
+            (args, options) =>
+              executeToolWithRecorder(
+                toolName,
+                args,
+                "agent",
+                (toolArgs) => handler(toolArgs, options),
+                options
+              )
           );
         } catch (error) {
           console.warn(`Failed to register tool ${toolName}:`, error);
@@ -213,41 +311,9 @@ export default function Dashboard() {
       }
     }
 
+    setWebMCPClient(client);
     return client;
-  }, [updateScenarios]);
-
-  const addFlightLogEntry = useCallback(
-    (
-      toolName: string,
-      toolArgs: Record<string, unknown>,
-      origin: "user" | "agent"
-    ) => {
-      const policy = getToolPolicy(toolName);
-      const entry: FlightRecorderEntry = {
-        id: `entry-${Date.now()}-${Math.random()}`,
-        toolName,
-        toolArgs,
-        riskClassification: policy?.riskLevel || "read-only",
-        timestamp: new Date(),
-        status: "Discovered",
-        origin,
-      };
-      setFlightLog((prev) => [entry, ...prev]);
-      return entry;
-    },
-    []
-  );
-
-  const updateFlightLogEntry = useCallback(
-    (entryId: string, updates: Partial<FlightRecorderEntry>) => {
-      setFlightLog((prev) =>
-        prev.map((entry) =>
-          entry.id === entryId ? { ...entry, ...updates } : entry
-        )
-      );
-    },
-    []
-  );
+  }, [executeToolWithRecorder, updateScenarios]);
 
   const runAgentAnalysis = useCallback(async () => {
     if (!webmcpClient) return;
@@ -259,34 +325,37 @@ export default function Dashboard() {
       // Step 1: Discover tools
       const entry1 = addFlightLogEntry("discover_tools", {}, "agent");
       await new Promise((r) => setTimeout(r, 500));
-      updateFlightLogEntry(entry1.id, { status: "Executed" });
+      const tools = await webmcpClient.discoverTools();
+      updateFlightLogEntry(entry1.id, { status: "Executed", result: tools });
 
       // Step 2: Get financial state
-      const entry2 = addFlightLogEntry("get_financial_state", {}, "agent");
       await new Promise((r) => setTimeout(r, 500));
-      const state = await webmcpClient.invokeTool("get_financial_state", {});
-      updateFlightLogEntry(entry2.id, { status: "Executed", result: state });
+      await executeToolWithRecorder(
+        "get_financial_state",
+        {},
+        "agent",
+        toolHandlersRef.current.get_financial_state
+      );
 
       // Step 3-5: Fork scenarios
       for (const config of SCENARIO_CONFIGS) {
-        const entryN = addFlightLogEntry(
+        await new Promise((r) => setTimeout(r, 800));
+        await executeToolWithRecorder(
           "fork_scenario",
           config,
-          "agent"
+          "agent",
+          toolHandlersRef.current.fork_scenario
         );
-        await new Promise((r) => setTimeout(r, 800));
-        const result = await webmcpClient.invokeTool("fork_scenario", config);
-        updateFlightLogEntry(entryN.id, { status: "Executed", result });
       }
 
       // Step 6: Compare scenarios
-      const entry6 = addFlightLogEntry("compare_scenarios", {}, "agent");
       await new Promise((r) => setTimeout(r, 500));
-      const comparison = (await webmcpClient.invokeTool(
+      const comparison = (await executeToolWithRecorder(
         "compare_scenarios",
-        {}
+        {},
+        "agent",
+        toolHandlersRef.current.compare_scenarios
       )) as { recommended?: Scenario };
-      updateFlightLogEntry(entry6.id, { status: "Executed", result: comparison });
 
       if (comparison && comparison.recommended) {
         setRecommendedScenario(comparison.recommended.id);
@@ -296,7 +365,7 @@ export default function Dashboard() {
     } finally {
       setIsAgentRunning(false);
     }
-  }, [webmcpClient, addFlightLogEntry, updateFlightLogEntry]);
+  }, [webmcpClient, addFlightLogEntry, executeToolWithRecorder, updateFlightLogEntry]);
 
   const handleReset = useCallback(() => {
     setFinancialState(DEFAULT_FINANCIAL_STATE);
@@ -310,48 +379,32 @@ export default function Dashboard() {
     async (scenarioId: string) => {
       if (!webmcpClient) return;
 
-      const entry = addFlightLogEntry("simulate_purchase", { scenarioId }, "user");
-
       try {
-        const result = await webmcpClient.invokeTool("simulate_purchase", {
-          scenarioId,
-        });
-        updateFlightLogEntry(entry.id, { status: "Simulated", result });
-      } catch (error) {
-        updateFlightLogEntry(entry.id, {
-          status: "Failed",
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
+        await executeToolWithRecorder(
+          "simulate_purchase",
+          { scenarioId },
+          "user",
+          toolHandlersRef.current.simulate_purchase
+        );
+      } catch {}
     },
-    [webmcpClient, addFlightLogEntry, updateFlightLogEntry]
+    [webmcpClient, executeToolWithRecorder]
   );
 
   const handleCommitScenario = useCallback(
     async (scenarioId: string) => {
       if (!webmcpClient) return;
 
-      const entry = addFlightLogEntry("commit_scenario", { scenarioId }, "user");
-
       try {
-        const result = await webmcpClient.invokeTool("commit_scenario", {
-          scenarioId,
-        });
-        const pendingEntry = {
-          ...entry,
-          status: "Awaiting Approval" as const,
-          result,
-        };
-        updateFlightLogEntry(entry.id, pendingEntry);
-        setPendingApproval(pendingEntry);
-      } catch (error) {
-        updateFlightLogEntry(entry.id, {
-          status: "Failed",
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
+        await executeToolWithRecorder(
+          "commit_scenario",
+          { scenarioId },
+          "user",
+          toolHandlersRef.current.commit_scenario
+        );
+      } catch {}
     },
-    [webmcpClient, addFlightLogEntry, updateFlightLogEntry]
+    [webmcpClient, executeToolWithRecorder]
   );
 
   // Initialize on client mount. The ref guard keeps this idempotent under

@@ -26,7 +26,7 @@ export function calculateScenario(
   let cashBefore = state.cashSavings;
 
   // Add savings accrued during wait period
-  const monthlySavings = state.monthlyTakeHome - state.monthlyLivingExpenses;
+  const monthlySavings = state.monthlySavingsContribution;
   const savingsAccrued = monthlySavings * waitMonths;
   cashBefore += savingsAccrued;
 
