@@ -59,11 +59,7 @@ export default function ConfirmationModal({
 }: ConfirmationModalProps) {
   const scenario = isScenarioResult(entry.result) ? entry.result.scenario : null;
   const goalRows = scenario
-    ? [
-        { label: "Emergency fund", preserved: scenario.emergencyFundPreserved },
-        { label: "Graduate school reserve", preserved: scenario.graduateSchoolPreserved },
-        { label: "Austin moving funds", preserved: scenario.movingFundsPreserved },
-      ]
+    ? scenario.goalStatuses.map((g) => ({ label: g.name, preserved: g.preserved }))
     : [];
   const compromised = goalRows.filter((g) => !g.preserved);
 

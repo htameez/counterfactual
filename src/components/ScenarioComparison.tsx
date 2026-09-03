@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import type { Scenario } from "@/types";
 import { formatCurrency } from "@/lib/financialCalculations";
-import { Check, AlertTriangle, GitBranch, Sparkles } from "lucide-react";
+import { Check, AlertTriangle, GitBranch, Plus, Sparkles } from "lucide-react";
 import ScenarioChart from "./ScenarioChart";
 
 interface ScenarioComparisonProps {
@@ -11,6 +12,7 @@ interface ScenarioComparisonProps {
   currentCash: number;
   onSimulate: (scenarioId: string) => void;
   onCommit: (scenarioId: string) => void;
+  onForkCustom: (name: string, purchasePrice: number, waitMonths: number) => void;
 }
 
 const RISK_STYLES: Record<
@@ -39,15 +41,107 @@ function TimelineStrip({ scenario }: { scenario: Scenario }) {
         <div
           className={`absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 border-ink-900 ${dot}`}
           style={{ left: `${purchasePct}%` }}
-          title={scenario.waitMonths === 0 ? "Buy today" : `Buy at month ${scenario.waitMonths}`}
+          title={scenario.waitMonths === 0 ? "Act today" : `Act at month ${scenario.waitMonths}`}
         />
       </div>
       <div className="mt-1 flex justify-between text-[10px] text-ink-500">
-        <span>Today{scenario.waitMonths === 0 ? " · buy" : ""}</span>
+        <span>Today{scenario.waitMonths === 0 ? " · act" : ""}</span>
         {scenario.waitMonths > 0 && (
-          <span className="text-ink-400">buy · +{scenario.waitMonths}mo</span>
+          <span className="text-ink-400">act · +{scenario.waitMonths}mo</span>
         )}
         <span>+{horizon}mo</span>
+      </div>
+    </div>
+  );
+}
+
+function AddFutureCard({
+  onForkCustom,
+}: {
+  onForkCustom: ScenarioComparisonProps["onForkCustom"];
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState("");
+  const [wait, setWait] = useState("0");
+
+  const handleSubmit = () => {
+    const priceNum = Number(price);
+    const waitNum = Number(wait);
+    if (name.trim().length === 0 || !isFinite(priceNum) || priceNum < 0 || !isFinite(waitNum) || waitNum < 0) {
+      return;
+    }
+    onForkCustom(name.trim(), priceNum, waitNum);
+    setName("");
+    setPrice("");
+    setWait("0");
+    setOpen(false);
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-ink-600 p-4 text-ink-400 transition-colors hover:border-indigo-400/60 hover:text-indigo-300 min-h-[200px]"
+      >
+        <Plus className="h-6 w-6" />
+        <span className="text-sm font-medium">Add your own future</span>
+        <span className="text-center text-xs text-ink-500">
+          Not one of the three defaults? Fork any price and wait period you
+          want.
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-col rounded-xl border border-indigo-400/40 bg-ink-900 p-4">
+      <h3 className="mb-3 text-sm font-semibold text-ink-50">
+        Fork a custom future
+      </h3>
+      <div className="space-y-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Name this future"
+          autoFocus
+          className="w-full rounded border border-ink-600 bg-ink-800 px-3 py-1.5 text-sm text-ink-50 placeholder:text-ink-500 focus:border-indigo-400 focus:outline-none"
+        />
+        <div className="flex gap-2">
+          <input
+            type="number"
+            min="0"
+            step="100"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="Price ($)"
+            className="w-1/2 rounded border border-ink-600 bg-ink-800 px-3 py-1.5 text-sm text-ink-50 placeholder:text-ink-500 focus:border-indigo-400 focus:outline-none"
+          />
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={wait}
+            onChange={(e) => setWait(e.target.value)}
+            placeholder="Wait (months)"
+            className="w-1/2 rounded border border-ink-600 bg-ink-800 px-3 py-1.5 text-sm text-ink-50 placeholder:text-ink-500 focus:border-indigo-400 focus:outline-none"
+          />
+        </div>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={() => setOpen(false)}
+          className="flex-1 rounded border border-ink-600 px-3 py-1.5 text-sm font-medium text-ink-300 hover:bg-ink-800"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={name.trim().length === 0 || price.trim().length === 0}
+          className="flex-1 rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-ink-500"
+        >
+          Fork it
+        </button>
       </div>
     </div>
   );
@@ -59,19 +153,19 @@ export default function ScenarioComparison({
   currentCash,
   onSimulate,
   onCommit,
+  onForkCustom,
 }: ScenarioComparisonProps) {
   if (scenarios.length === 0) {
     return (
       <div className="border-b border-ink-700 bg-ink-900/60 p-6">
         <div className="flex items-center gap-2 mb-4">
           <GitBranch className="h-4 w-4 text-indigo-400" />
-          <h2 className="text-lg font-semibold text-ink-50">
-            Your Roadmap: Three Possible Futures
-          </h2>
+          <h2 className="text-lg font-semibold text-ink-50">Your Roadmap</h2>
         </div>
         <div className="rounded-lg border border-dashed border-ink-700 py-10 text-center">
           <p className="text-ink-400">
-            Run agent analysis to fork this decision into comparable futures
+            Run agent analysis, or fork a future yourself, to see this
+            decision play out
           </p>
         </div>
       </div>
@@ -85,9 +179,7 @@ export default function ScenarioComparison({
     <div className="border-b border-ink-700 bg-ink-900/60 p-6">
       <div className="mb-1 flex items-center gap-2">
         <GitBranch className="h-4 w-4 text-indigo-400" />
-        <h2 className="text-lg font-semibold text-ink-50">
-          Your Roadmap: Three Possible Futures
-        </h2>
+        <h2 className="text-lg font-semibold text-ink-50">Your Roadmap</h2>
       </div>
       <p className="mb-6 text-sm text-ink-400">
         Every path forks from the same point in time. Compare where each one
@@ -163,7 +255,7 @@ export default function ScenarioComparison({
               {/* Stats */}
               <div className="my-3 space-y-1.5 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-ink-400">Purchase price</span>
+                  <span className="text-ink-400">Cost</span>
                   <span className="font-medium text-ink-100">
                     {formatCurrency(scenario.purchasePrice)}
                   </span>
@@ -183,24 +275,22 @@ export default function ScenarioComparison({
               </div>
 
               {/* Protected Goals Status */}
-              <div className="mb-3 space-y-1.5 rounded-lg border border-ink-700 bg-ink-850 p-3">
-                {[
-                  { label: "Emergency fund", ok: scenario.emergencyFundPreserved },
-                  { label: "Grad school reserve", ok: scenario.graduateSchoolPreserved },
-                  { label: "Austin moving funds", ok: scenario.movingFundsPreserved },
-                ].map((goal) => (
-                  <div key={goal.label} className="flex items-center gap-2 text-sm">
-                    {goal.ok ? (
-                      <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
-                    ) : (
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                    )}
-                    <span className={goal.ok ? "text-ink-200" : "text-amber-300"}>
-                      {goal.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              {scenario.goalStatuses.length > 0 && (
+                <div className="mb-3 space-y-1.5 rounded-lg border border-ink-700 bg-ink-850 p-3">
+                  {scenario.goalStatuses.map((goal) => (
+                    <div key={goal.id} className="flex items-center gap-2 text-sm">
+                      {goal.preserved ? (
+                        <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                      ) : (
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                      )}
+                      <span className={goal.preserved ? "text-ink-200" : "text-amber-300"}>
+                        {goal.name}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Explanation */}
               <div className="mb-4 flex-1 rounded-lg bg-ink-850 p-3 text-sm text-ink-300">
@@ -225,6 +315,8 @@ export default function ScenarioComparison({
             </div>
           );
         })}
+
+        <AddFutureCard onForkCustom={onForkCustom} />
       </div>
 
       {/* Comparison Chart */}

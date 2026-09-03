@@ -1,24 +1,65 @@
-import type { FinancialState, Scenario } from "@/types";
+import type {
+  Decision,
+  FinancialState,
+  GoalStatus,
+  ProtectedGoal,
+  Scenario,
+} from "@/types";
 
 export const DEFAULT_FINANCIAL_STATE: FinancialState = {
   cashSavings: 72000,
   monthlyTakeHome: 6000,
   monthlyLivingExpenses: 3200,
-  teslaPurchasePrice: 44000,
-  emergencyFundMinimum: 19200,
-  graduateSchoolReserve: 18000,
-  austinMovingCost: 6000,
   monthlySavingsContribution: 2800,
 };
 
-export const SCENARIO_CONFIGS = [
-  { name: "Buy Now", purchasePrice: 44000, waitMonths: 0 },
-  { name: "Wait 8 Months", purchasePrice: 44000, waitMonths: 8 },
-  { name: "Buy Used", purchasePrice: 32000, waitMonths: 0 },
+// A starting example, not a fixed scenario — define_decision replaces this
+// entirely, and everything downstream (scenarios, goal checks, the prompt
+// quote) is computed from whatever decision is active.
+export const DEFAULT_DECISION: Decision = {
+  name: "Buy a Tesla Model 3 in cash",
+  description: "All-in purchase price, including taxes and fees.",
+  baseCost: 44000,
+};
+
+export const DEFAULT_PROTECTED_GOALS: ProtectedGoal[] = [
+  { id: "goal-emergency", name: "Emergency fund", targetAmount: 19200 },
+  { id: "goal-school", name: "Graduate school reserve", targetAmount: 18000 },
+  { id: "goal-move", name: "Austin moving fund", targetAmount: 6000 },
 ];
+
+export const DEFAULT_SCENARIO_WAIT_MONTHS = 8;
+// Default "cheaper alternative" price when a new decision is defined —
+// just a starting point; the wait period and this price are both editable.
+export const ALTERNATIVE_COST_RATIO = 0.7;
+
+export function defaultAlternativeCost(baseCost: number): number {
+  return Math.round(baseCost * ALTERNATIVE_COST_RATIO);
+}
+
+export interface ScenarioConfig {
+  name: string;
+  purchasePrice: number;
+  waitMonths: number;
+}
+
+/** The three canonical forks for whatever decision is currently active. */
+export function buildScenarioConfigs(
+  decision: Decision,
+  waitMonths: number,
+  alternativeCost: number
+): ScenarioConfig[] {
+  const waitLabel = `Wait ${waitMonths} Month${waitMonths === 1 ? "" : "s"}`;
+  return [
+    { name: "Do It Now", purchasePrice: decision.baseCost, waitMonths: 0 },
+    { name: waitLabel, purchasePrice: decision.baseCost, waitMonths },
+    { name: "Cheaper Alternative", purchasePrice: alternativeCost, waitMonths: 0 },
+  ];
+}
 
 export function calculateScenario(
   state: FinancialState,
+  goals: ProtectedGoal[],
   purchasePrice: number,
   waitMonths: number
 ): Omit<Scenario, "id" | "name"> {
@@ -37,35 +78,38 @@ export function calculateScenario(
   const additionalSavings = monthlySavings * Math.max(totalMonthsToProject - waitMonths, 3);
   const cashAfterWait = cashAfterPurchase + additionalSavings;
 
-  // Check if protected goals are preserved
-  const emergencyFundPreserved = cashAfterPurchase >= state.emergencyFundMinimum;
-  const graduateSchoolPreserved =
-    cashAfterPurchase >=
-    state.emergencyFundMinimum + state.graduateSchoolReserve;
-  const movingFundsPreserved =
-    cashAfterPurchase >=
-    state.emergencyFundMinimum +
-      state.graduateSchoolReserve +
-      state.austinMovingCost;
+  // Goals are protected in priority order — the order the user added them
+  // in. Each goal must be covered on top of every higher-priority goal
+  // before it, so goal N is safe only if remaining cash covers goals 1..N.
+  let cumulativeTarget = 0;
+  const goalStatuses: GoalStatus[] = goals.map((goal) => {
+    cumulativeTarget += goal.targetAmount;
+    return {
+      id: goal.id,
+      name: goal.name,
+      targetAmount: goal.targetAmount,
+      preserved: cashAfterPurchase >= cumulativeTarget,
+    };
+  });
 
-  // Calculate total remaining buffer
   const totalRemainingBuffer = cashAfterPurchase;
+  const compromised = goalStatuses.filter((g) => !g.preserved);
 
-  // Determine risk level
+  // Low: everything protected. Medium: only the lowest-priority goal slips.
+  // High: anything higher-priority than that is compromised too.
   let riskLevel: "Low" | "Medium" | "High" = "Low";
-  if (!movingFundsPreserved) {
-    riskLevel = "High";
-  } else if (!graduateSchoolPreserved) {
-    riskLevel = "Medium";
+  if (compromised.length > 0) {
+    const lastGoalId = goalStatuses[goalStatuses.length - 1]?.id;
+    riskLevel =
+      compromised.length === 1 && compromised[0].id === lastGoalId
+        ? "Medium"
+        : "High";
   }
 
-  // Generate explanation
   const explanation = generateExplanation(
     waitMonths,
-    purchasePrice,
-    emergencyFundPreserved,
-    graduateSchoolPreserved,
-    movingFundsPreserved
+    goalStatuses,
+    cashAfterPurchase
   );
 
   return {
@@ -73,9 +117,7 @@ export function calculateScenario(
     waitMonths,
     cashAfterPurchase,
     cashAfterWait,
-    emergencyFundPreserved,
-    graduateSchoolPreserved,
-    movingFundsPreserved,
+    goalStatuses,
     totalRemainingBuffer,
     riskLevel,
     explanation,
@@ -84,36 +126,28 @@ export function calculateScenario(
 
 function generateExplanation(
   waitMonths: number,
-  purchasePrice: number,
-  emergencyPreserved: boolean,
-  schoolPreserved: boolean,
-  movingPreserved: boolean
+  goalStatuses: GoalStatus[],
+  cashAfterPurchase: number
 ): string {
-  if (waitMonths === 0 && purchasePrice === 44000) {
-    if (!emergencyPreserved) {
-      return "Buying now depletes your emergency fund. High financial risk.";
-    }
-    if (!schoolPreserved) {
-      return "Buying now preserves emergency fund but risks grad school reserve.";
-    }
-    return "Buying now is safe but leaves minimal buffer for moves.";
+  const timing =
+    waitMonths === 0
+      ? "Doing this now"
+      : `Waiting ${waitMonths} month${waitMonths === 1 ? "" : "s"} first`;
+  const compromised = goalStatuses.filter((g) => !g.preserved).map((g) => g.name);
+
+  if (goalStatuses.length === 0) {
+    return `${timing} leaves ${formatCurrency(cashAfterPurchase)} in the bank. Add a protected goal to see how this future measures up against what matters to you.`;
   }
 
-  if (waitMonths === 8) {
-    if (movingPreserved) {
-      return "Waiting 8 months lets you save enough to preserve all goals.";
-    }
-    return "Waiting 8 months improves your position but may still compress reserves.";
+  if (compromised.length === 0) {
+    return `${timing} keeps every protected goal funded, with ${formatCurrency(cashAfterPurchase)} left over.`;
   }
 
-  if (purchasePrice === 32000) {
-    if (movingPreserved) {
-      return "Buying used is the most conservative option—all goals are safe.";
-    }
-    return "Buying used frees up capital while preserving most reserves.";
+  if (compromised.length === goalStatuses.length) {
+    return `${timing} wipes out every protected goal you've set — high risk.`;
   }
 
-  return "Scenario analysis complete.";
+  return `${timing} covers the cost but puts ${compromised.join(", ")} below target.`;
 }
 
 export function formatCurrency(value: number): string {

@@ -6,11 +6,13 @@
 
 Counterfactual demonstrates a critical principle: **agents shouldn't discover the consequences of an action after executing it.**
 
+Counterfactual isn't a fixed demo of one purchase decision — it's a roadmapping tool for *your* decision. There's no hardcoded "Tesla scenario" baked into the data model: `define_decision` and `set_protected_goal`/`remove_protected_goal` let you (or an agent, on your behalf) tell it what you're actually weighing and what you don't want to jeopardize — a purchase, a leave of absence, a move, a career change — and every future it forks is computed against *that*, not a preset. The Tesla example is just what loads first, to show the shape of the thing; replace it and the whole roadmap rebuilds around your real decision.
+
 ## The Problem
 
 Today, when an agent takes an action—booking a flight, making a financial decision, sending an email—you typically learn the consequences only after the fact. By then, it's often too late to change course.
 
-Counterfactual inverts this: it **simulates the future**, lets you explore multiple outcomes, and only executes actions you explicitly approve.
+Counterfactual inverts this: it **simulates the future**, lets you explore multiple outcomes — including ones you invent yourself, not just the defaults — and only executes actions you explicitly approve.
 
 ## Why WebMCP Is Essential
 
@@ -26,22 +28,23 @@ Without WebMCP, Counterfactual would be a pre-built financial calculator. With i
 
 ## Human-Agent Collaboration Flow
 
-1. **User sets assumptions** (cash, income, expenses, goals)
-2. **Agent discovers** available WebMCP tools
-3. **Agent explores** multiple scenarios in simulation
-4. **Agent recommends** the best path based on protected goals
-5. **User inspects** the Flight Recorder to understand the agent's reasoning
-6. **User approves** the chosen scenario, or rejects and revises
-7. **System records** the decision in the Flight Recorder
+1. **User defines the decision** — what they're weighing and its all-in cost (`define_decision`), or an agent proposes it from a natural-language question and the user confirms
+2. **User (or agent) names what not to jeopardize** — protected goals, in priority order (`set_protected_goal` / `remove_protected_goal`)
+3. **Agent discovers** available WebMCP tools
+4. **Agent explores** multiple futures in simulation, including any the user forked themselves
+5. **Agent recommends** the best path based on the protected goals *as the user defined them*
+6. **User inspects** the Flight Recorder to understand the agent's reasoning — every define/set/fork call is logged, not just the commitment
+7. **User approves** the chosen scenario, or rejects and revises
+8. **System records** the decision in the Flight Recorder
 
-At every step, the human maintains visibility and control.
+At every step, the human maintains visibility and control — including control over what the decision and its stakes even *are*, not just the final yes/no.
 
-## The Six WebMCP Tools
+## The Nine WebMCP Tools
 
 ### 1. `get_financial_state`
 **Risk:** Read-only | **Confirmation:** Not required
 
-Returns your current assumptions and protected financial goals.
+Returns your current assumptions, the active decision, and protected goals.
 
 **Response:**
 ```json
@@ -49,10 +52,11 @@ Returns your current assumptions and protected financial goals.
   "cashSavings": 72000,
   "monthlyTakeHome": 6000,
   "monthlyLivingExpenses": 3200,
-  "teslaPurchasePrice": 44000,
-  "emergencyFundMinimum": 19200,
-  "graduateSchoolReserve": 18000,
-  "austinMovingCost": 6000
+  "monthlySavingsContribution": 2800,
+  "decision": { "name": "Buy a Tesla Model 3 in cash", "baseCost": 44000 },
+  "protectedGoals": [
+    { "id": "goal-emergency", "name": "Emergency fund", "targetAmount": 19200 }
+  ]
 }
 ```
 
@@ -70,36 +74,66 @@ Modifies one financial assumption and immediately recalculates all scenarios.
 { "success": true, "field": "cashSavings", "value": 75000 }
 ```
 
-### 3. `fork_scenario`
-**Risk:** Simulation | **Confirmation:** Not required
+### 3. `define_decision`
+**Risk:** Reversible | **Confirmation:** Not required
 
-Simulates a purchase scenario and returns calculated outcomes.
+Defines or replaces the decision being weighed — this is the tool that makes the app *yours* instead of a fixed Tesla demo. Resets the three canonical futures around the new cost; protected goals carry over.
 
 **Inputs:**
-- `name` (string): Scenario name (e.g., "Buy Now")
-- `purchasePrice` (number): Price to pay
-- `waitMonths` (number): Months to wait before purchase
+- `name` (string): What you're deciding, e.g. "Take 3 months unpaid leave to write a novel"
+- `description` (string, optional): One-line context
+- `baseCost` (number): All-in cost of doing it now
+
+**Response:** the new `Decision` object.
+
+### 4. `set_protected_goal`
+**Risk:** Reversible | **Confirmation:** Not required
+
+Adds a protected goal, or updates its target if a goal with that name (case-insensitive) already exists. Goals are checked in the order added — each one must be covered on top of every goal before it.
+
+**Inputs:**
+- `name` (string): e.g. "Emergency fund", "Book advance fund"
+- `targetAmount` (number): Non-negative dollar amount to protect
+
+### 5. `remove_protected_goal`
+**Risk:** Reversible | **Confirmation:** Not required
+
+Removes a protected goal by name. Every existing future is recalculated without it.
+
+**Inputs:**
+- `name` (string)
+
+### 6. `fork_scenario`
+**Risk:** Simulation | **Confirmation:** Not required
+
+Simulates a future for the active decision and returns calculated outcomes — any price and wait period, not just the three defaults. This is the same tool the "Add your own future" button in the UI calls.
+
+**Inputs:**
+- `name` (string): Scenario name (e.g., "Do It Now", or anything you want)
+- `purchasePrice` (number): Cost for this future
+- `waitMonths` (number): Months to wait before acting
 
 **Response:**
 ```json
 {
-  "id": "scenario-buy-now",
-  "name": "Buy Now",
+  "id": "scenario-do-it-now",
+  "name": "Do It Now",
   "purchasePrice": 44000,
   "waitMonths": 0,
   "cashAfterPurchase": 28000,
-  "emergencyFundPreserved": true,
-  "graduateSchoolPreserved": false,
-  "movingFundsPreserved": false,
+  "goalStatuses": [
+    { "id": "goal-emergency", "name": "Emergency fund", "targetAmount": 19200, "preserved": true },
+    { "id": "goal-school", "name": "Graduate school reserve", "targetAmount": 18000, "preserved": false }
+  ],
   "riskLevel": "Medium",
-  "explanation": "Buying now preserves emergency fund but risks grad school reserve."
+  "explanation": "Doing this now preserves emergency fund but risks grad school reserve."
 }
 ```
 
-### 4. `compare_scenarios`
+### 7. `compare_scenarios`
 **Risk:** Read-only | **Confirmation:** Not required
 
-Analyzes all simulated futures and identifies the strongest scenario.
+Analyzes all simulated futures and identifies the strongest scenario, weighting higher-priority protected goals more heavily.
 
 **Response:**
 ```json
@@ -107,16 +141,16 @@ Analyzes all simulated futures and identifies the strongest scenario.
   "recommended": { /* scenario object */ },
   "all": [ /* all scenarios */ ],
   "analysis": {
-    "bestChoice": "Buy Used",
+    "bestChoice": "Cheaper Alternative",
     "reason": "Preserves all protected goals with lowest financial stress"
   }
 }
 ```
 
-### 5. `simulate_purchase`
+### 8. `simulate_purchase`
 **Risk:** Simulation | **Confirmation:** Not required
 
-Shows exactly what your finances look like after a purchase—but does not execute it.
+Shows exactly what your finances look like in a given future—but does not execute it.
 
 **Inputs:**
 - `scenarioId` (string): Scenario to simulate
@@ -129,13 +163,12 @@ Shows exactly what your finances look like after a purchase—but does not execu
     "initialCash": 72000,
     "purchaseAmount": 44000,
     "remainingCash": 28000,
-    "emergencyFundSafe": true,
-    "graduateSchoolSafe": false
+    "goalStatuses": [ /* GoalStatus[] */ ]
   }
 }
 ```
 
-### 6. `commit_scenario`
+### 9. `commit_scenario`
 **Risk:** External Commitment | **Confirmation:** **Always required**
 
 Represents a consequential external commitment. **Never executes immediately.**
@@ -213,27 +246,27 @@ For compatibility, Counterfactual includes a **compatibility helper** ([`src/lib
 
 ## Demo Scenario
 
-The application focuses on one decision: **Should I buy a Tesla Model 3 in cash?**
+The app loads with a **starting example**, not a fixed scenario: **Should I buy a Tesla Model 3 in cash?** Every field below is user data, editable through the UI or the `define_decision` / `set_protected_goal` tools — nothing about it is hardcoded into the app.
 
-### Assumptions
+### Starting assumptions
 - **Cash savings:** $72,000
 - **Monthly take-home:** $6,000
 - **Monthly expenses:** $3,200
 - **Monthly savings:** $2,800
-- **Tesla price (all-in):** $44,000
-- **Emergency fund minimum:** $19,200
-- **Grad school reserve:** $18,000
-- **Austin moving cost:** $6,000
+- **Decision:** Buy a Tesla Model 3 in cash — all-in cost $44,000
+- **Protected goals (in priority order):** Emergency fund $19,200, Graduate school reserve $18,000, Austin moving fund $6,000
 
-### Three Futures
-1. **Buy Now** – Purchase immediately
-2. **Wait 8 Months** – Accumulate savings first
-3. **Buy Used** – Buy a used Model 3 for $32,000
+### Three canonical futures, generated from *whatever decision is active*
+1. **Do It Now** – Act immediately, at the decision's full cost
+2. **Wait N Months** – Accumulate savings first (default 8 months, editable)
+3. **Cheaper Alternative** – A lower-cost version of the same decision (default 70% of base cost, editable)
+
+Plus **as many custom futures as you want** — the "Add your own future" card on the roadmap, or the `fork_scenario` tool directly, forks any name/price/wait-period combination.
 
 Each scenario shows:
-- Remaining cash immediately after purchase
+- Remaining cash immediately after acting
 - Remaining cash after 12 months
-- Whether all protected goals are preserved
+- Which protected goals stay funded, in priority order — computed live against *your* goals, not a fixed three
 - Risk classification (Low, Medium, High)
 - Plain-language explanation
 
@@ -271,27 +304,30 @@ npm run build
 
 2. **Run agent analysis:** Click "Run Agent Analysis." Watch the Flight Recorder populate in real time:
    - Discovers tools
-   - Gets financial state
-   - Forks three scenarios (Buy Now, Wait 8 Months, Buy Used)
+   - Gets financial state (including the active decision and protected goals)
+   - Forks the three canonical futures for that decision
    - Compares them
    - Recommends the best choice
 
 3. **Inspect the Flight Recorder:** "Every tool invocation is recorded with its risk classification, arguments, and status. This is the agent's audit trail."
 
-4. **Explore a scenario:** Click "Explore This Future" on any scenario. See the simulation of what your finances would look like.
+4. **Make it your own decision:** In "Your Decision," replace the Tesla example — try "Take 3 months unpaid leave to write a novel," cost $15,000, click Update Decision. Watch all three futures rebuild around the new number, live, through `define_decision`.
 
-5. **Simulate a commitment:** The agent can recommend "Buy Used"—which preserves all three protected goals (emergency fund, grad school, moving costs).
+5. **Add a goal only you would think to protect:** Under "What you don't want to jeopardize," add "Book advance fund" at $5,000. Every future recalculates against it immediately, in priority order alongside the others.
 
-6. **Approve or reject:** If you were to commit, a modal would require explicit approval. This is where humans stay in control.
+6. **Fork a future of your own:** Click "Add your own future" and try a price/wait combination none of the three defaults cover — this calls the exact same `fork_scenario` tool the agent uses.
 
-7. **Edit assumptions:** Try changing "Cash savings" to $80,000 and watch all scenarios recalculate instantly.
+7. **Explore a scenario:** Click "Explore" on any scenario. See the simulation of what your finances would look like.
 
-8. **Reset:** Click "Reset Demo" to restore defaults and clear the Flight Recorder.
+8. **Approve or reject a commitment:** Click "Commit" on a scenario. A modal opens requiring a freshly generated code to be typed back before Approve unlocks — explicit, verified human control, not just a click-through.
+
+9. **Reset:** Click "Reset Demo" to restore the Tesla example and clear the Flight Recorder.
 
 ## Key Features
 
+✓ **User-defined decisions and goals** – `define_decision` and `set_protected_goal`/`remove_protected_goal` mean nothing about the scenario is hardcoded; the Tesla example is a starting point, not the product  
 ✓ **Polished desktop-first interface** – Clean, readable, no excessive gradients or glowing effects  
-✓ **Three forked futures** – Visual scenario cards with risk classification and explanations  
+✓ **Forked futures, including your own** – Three canonical futures plus unlimited custom ones via "Add your own future" or `fork_scenario`  
 ✓ **Real-time Flight Recorder** – Tool invocations recorded with risk and status  
 ✓ **Approval gates** – Consequential actions require explicit human confirmation  
 ✓ **Scripted agent demo** – Automated analysis that feels like an agent operating the live interface  
@@ -305,7 +341,7 @@ npm run build
 
 ## Current Limitations
 
-- **Single scenario:** Focused on the Tesla purchase decision only
+- **One active decision at a time:** You can redefine the decision freely, but the app tracks a single decision + goal set, not a saved portfolio of past ones — switching decisions replaces the roadmap rather than archiving it.
 - **Deterministic calculations:** No Monte Carlo simulation or probabilistic modeling
 - **Simulated commitments:** No real financial transactions
 - **No persistence:** Reloading the page resets state (by design)
@@ -327,13 +363,15 @@ The same WebMCP tool-discovery, simulation, and approval flow that works in this
 
 ## Visual Design
 
-- **Background:** Warm off-white (`#fafaf8`)
-- **Text:** Deep navy (`#1a1a16`)
-- **Agent actions:** Indigo (`#2727ff`)
-- **Protected goals:** Emerald (`#22c55e`)
-- **Warnings:** Amber (`#f59e0b`)
-- **Risk/rejection:** Red (`#dc2626`)
-- **Cards:** Rounded corners, subtle shadows, clear hierarchy
+A dark, board-like interface — the central metaphor is **forking paths**, made literal: a "Today" node visibly branches into every future via drawn connector lines, not just a row of cards.
+
+- **Background:** Near-black ink tones (`#0a0c12` → `#1b1f2a` surfaces), with a faint dotted board texture
+- **Text:** Off-white / light gray on dark (`#e2e4ea` primary, `#767d8f` muted)
+- **Agent / simulation actions:** Violet-indigo (`#7c66ff`)
+- **Protected goals:** Emerald (`#1fc27f`)
+- **Warnings:** Amber (`#ef9a0c`)
+- **Risk/rejection/commitment:** Red
+- **Cards:** Rounded corners, subtle borders, a restrained glow only on the agent's recommended future
 - **Animations:** Smooth transitions, no distracting effects
 
 ## Technology Stack
@@ -343,13 +381,14 @@ The same WebMCP tool-discovery, simulation, and approval flow that works in this
 - **Styling:** Tailwind CSS
 - **Charts:** Recharts (lightweight bar chart for scenario comparison)
 - **Icons:** Lucide React
+- **WebMCP runtime:** [`@mcp-b/webmcp-polyfill`](https://www.npmjs.com/package/@mcp-b/webmcp-polyfill) — puts a real `document.modelContext` on the page for genuine external discoverability
 - **State:** Client-side React hooks (no database)
 
 ## Submission Summary
 
 Counterfactual demonstrates that **WebMCP is not just a data-fetching protocol—it's a permission and transparency layer for the agentic web.**
 
-By combining tool discovery, simulation, forking, and approval gates, Counterfactual shows how humans can maintain control and visibility even as agents explore and recommend. The Flight Recorder, scenario branching, and risk classification make agent reasoning inspectable and auditable.
+By combining tool discovery, simulation, forking, and approval gates, Counterfactual shows how humans can maintain control and visibility even as agents explore and recommend — and it does this for *any* decision the user defines, not a fixed scenario, via `define_decision` and `set_protected_goal`. The Flight Recorder, scenario branching, and risk classification make agent reasoning inspectable and auditable.
 
 This is the future of responsible agentic AI: not automation that bypasses humans, but collaboration where agents explore possibilities and humans make the final call.
 

@@ -4,12 +4,13 @@ import type {
   ToolInputSchema,
   ToolMetadata,
 } from "@/types";
+import { DEFAULT_FINANCIAL_STATE } from "./financialCalculations";
 
 export const TOOL_POLICIES: Record<string, ToolMetadata> = {
   get_financial_state: {
     name: "get_financial_state",
     description:
-      "Read the user's current financial assumptions and protected goals before creating or comparing futures. Use this first when you need the baseline cash, income, expenses, Tesla price, emergency fund, school reserve, or moving reserve. This is read-only and makes no changes.",
+      "Read the user's current financial assumptions, the decision they're weighing, and the goals they've asked to protect. Use this first when you need the baseline cash, income, expenses, decision cost, or protected-goal targets. This is read-only and makes no changes.",
     riskLevel: "read-only",
     requiresConfirmation: false,
     reversible: true,
@@ -19,7 +20,7 @@ export const TOOL_POLICIES: Record<string, ToolMetadata> = {
   update_assumption: {
     name: "update_assumption",
     description:
-      "Update exactly one user-editable financial assumption, then refresh all calculated futures. Use this only when the user asks to change a number or correct an assumption. This is reversible because the user can change the value again.",
+      "Update exactly one user-editable financial assumption (cash, income, expenses, or savings rate), then refresh all calculated futures. Use this only when the user asks to change a number or correct an assumption. This is reversible because the user can change the value again.",
     riskLevel: "reversible",
     requiresConfirmation: false,
     reversible: true,
@@ -27,15 +28,48 @@ export const TOOL_POLICIES: Record<string, ToolMetadata> = {
       "Modifies a single financial assumption. You can change it back anytime.",
   },
 
+  define_decision: {
+    name: "define_decision",
+    description:
+      "Define or replace the decision the user is actually weighing — this is the whole point of the app, and it's the user's decision, not a fixed scenario. Give it a short name, an optional one-line description, and its all-in base cost. This resets the three canonical futures (Do It Now, Wait, Cheaper Alternative) around the new cost, but does not remove protected goals. Use this whenever the user describes a real decision they're facing, before forking any futures for it.",
+    riskLevel: "reversible",
+    requiresConfirmation: false,
+    reversible: true,
+    consequence:
+      "Sets the active decision everything else is compared against. Fully reversible — define a new one anytime.",
+  },
+
+  set_protected_goal: {
+    name: "set_protected_goal",
+    description:
+      "Add a new protected financial goal, or update the target amount of an existing one (matched by name, case-insensitive). Goals are protected in priority order — the first one added is checked first. Use this when the user names something they don't want this decision to jeopardize, e.g. an emergency fund, a deposit, a degree, a trip.",
+    riskLevel: "reversible",
+    requiresConfirmation: false,
+    reversible: true,
+    consequence:
+      "Adds or updates one protected goal and recalculates every future against it. Fully reversible.",
+  },
+
+  remove_protected_goal: {
+    name: "remove_protected_goal",
+    description:
+      "Remove a protected goal by name (case-insensitive). Use this when the user says a goal no longer applies. Every existing future is recalculated without it.",
+    riskLevel: "reversible",
+    requiresConfirmation: false,
+    reversible: true,
+    consequence:
+      "Removes one protected goal and recalculates every future without it. Reversible by adding it back with set_protected_goal.",
+  },
+
   fork_scenario: {
     name: "fork_scenario",
     description:
-      "Create or update a named possible future for buying the Tesla. Provide a human-readable name, purchase price, and wait time in months. The result predicts cash remaining, protected-goal status, risk level, and an explanation. This is simulation only and does not commit the user to anything.",
+      "Create or update a named possible future for the active decision. Provide a human-readable name, purchase price, and wait time in months — any price and wait period, not just the three defaults, so the user can explore a future that's actually theirs. The result predicts cash remaining, protected-goal status, risk level, and an explanation. This is simulation only and does not commit the user to anything.",
     riskLevel: "simulation",
     requiresConfirmation: false,
     reversible: true,
     consequence:
-      "Simulates a purchase scenario. No real money changes—this is purely exploratory.",
+      "Simulates a future for the active decision. No real money changes—this is purely exploratory.",
   },
 
   compare_scenarios: {
@@ -52,23 +86,23 @@ export const TOOL_POLICIES: Record<string, ToolMetadata> = {
   simulate_purchase: {
     name: "simulate_purchase",
     description:
-      "Preview the concrete financial outcome of one existing scenario by scenarioId. Use this when the user or agent wants to inspect a specific future in detail before deciding. This is simulation only and does not execute a purchase.",
+      "Preview the concrete financial outcome of one existing scenario by scenarioId. Use this when the user or agent wants to inspect a specific future in detail before deciding. This is simulation only and does not execute anything.",
     riskLevel: "simulation",
     requiresConfirmation: false,
     reversible: true,
     consequence:
-      "Shows exactly what your finances would look like after the purchase—but does not execute it.",
+      "Shows exactly what your finances would look like in this future—but does not execute it.",
   },
 
   commit_scenario: {
     name: "commit_scenario",
     description:
-      "Request human approval to move a selected simulated future toward commitment. This represents a consequential external action and must be used only after the user has reviewed the scenario. Calling this tool should pause at an approval step; no real purchase or payment occurs in this hackathon demo.",
+      "Request human approval to move a selected simulated future toward commitment. This represents a consequential external action and must be used only after the user has reviewed the scenario. Calling this tool should pause at an approval step; no real transaction occurs in this hackathon demo.",
     riskLevel: "external-commitment",
     requiresConfirmation: true,
     reversible: false,
     consequence:
-      "This would represent a real financial commitment. You must explicitly approve before it proceeds.",
+      "This would represent a real commitment. You must explicitly approve before it proceeds.",
   },
 };
 
@@ -76,7 +110,7 @@ export const TOOL_INPUT_SCHEMAS: Record<string, ToolInputSchema> = {
   get_financial_state: {
     type: "object",
     description:
-      "No input required. Returns the current assumptions and protected goals.",
+      "No input required. Returns the current assumptions, the active decision, and protected goals.",
     properties: {},
     additionalProperties: false,
   },
@@ -88,16 +122,7 @@ export const TOOL_INPUT_SCHEMAS: Record<string, ToolInputSchema> = {
     properties: {
       field: {
         type: "string",
-        enum: [
-          "cashSavings",
-          "monthlyTakeHome",
-          "monthlyLivingExpenses",
-          "teslaPurchasePrice",
-          "emergencyFundMinimum",
-          "graduateSchoolReserve",
-          "austinMovingCost",
-          "monthlySavingsContribution",
-        ],
+        enum: Object.keys(DEFAULT_FINANCIAL_STATE),
         description:
           "The financial assumption to update. Choose one exact field name.",
       },
@@ -112,28 +137,88 @@ export const TOOL_INPUT_SCHEMAS: Record<string, ToolInputSchema> = {
     additionalProperties: false,
   },
 
-  fork_scenario: {
+  define_decision: {
     type: "object",
     description:
-      "Create or replace a simulated Tesla purchase future. This does not execute a purchase.",
+      "Define or replace the decision being weighed. This does not execute anything — it just sets what the rest of the app compares futures against.",
     properties: {
       name: {
         type: "string",
         minLength: 1,
         description:
-          "Short human-readable scenario name, such as 'Buy Now', 'Wait 8 Months', or 'Buy Used'.",
+          "Short human-readable name for the decision, e.g. 'Buy a Tesla Model 3 in cash', 'Take 3 months unpaid leave', 'Put a deposit on a house'.",
+      },
+      description: {
+        type: "string",
+        description: "Optional one-line context for the decision.",
+      },
+      baseCost: {
+        type: "number",
+        minimum: 0,
+        description:
+          "All-in cost of doing this right now, in dollars. Used as the price for the 'Do It Now' and 'Wait' futures.",
+      },
+    },
+    required: ["name", "baseCost"],
+    additionalProperties: false,
+  },
+
+  set_protected_goal: {
+    type: "object",
+    description:
+      "Add a protected goal, or update its target amount if a goal with this name (case-insensitive) already exists.",
+    properties: {
+      name: {
+        type: "string",
+        minLength: 1,
+        description:
+          "Short name for the goal, e.g. 'Emergency fund', 'Wedding fund', 'Grad school reserve'.",
+      },
+      targetAmount: {
+        type: "number",
+        minimum: 0,
+        description: "The non-negative dollar amount to protect for this goal.",
+      },
+    },
+    required: ["name", "targetAmount"],
+    additionalProperties: false,
+  },
+
+  remove_protected_goal: {
+    type: "object",
+    description: "Remove a protected goal by name (case-insensitive).",
+    properties: {
+      name: {
+        type: "string",
+        minLength: 1,
+        description: "The exact name of the goal to remove.",
+      },
+    },
+    required: ["name"],
+    additionalProperties: false,
+  },
+
+  fork_scenario: {
+    type: "object",
+    description:
+      "Create or replace a simulated future for the active decision. This does not execute anything.",
+    properties: {
+      name: {
+        type: "string",
+        minLength: 1,
+        description:
+          "Short human-readable scenario name, such as 'Do It Now', 'Wait 8 Months', or a custom name of your own.",
       },
       purchasePrice: {
         type: "number",
         minimum: 0,
-        description:
-          "All-in Tesla purchase price for this future, in dollars.",
+        description: "All-in cost for this future, in dollars.",
       },
       waitMonths: {
         type: "number",
         minimum: 0,
         description:
-          "Number of months the user waits before making the purchase. Use 0 for buying now.",
+          "Number of months the user waits before acting. Use 0 for doing it now.",
       },
     },
     required: ["name", "purchasePrice", "waitMonths"],
@@ -167,7 +252,7 @@ export const TOOL_INPUT_SCHEMAS: Record<string, ToolInputSchema> = {
   commit_scenario: {
     type: "object",
     description:
-      "Ask the user to approve a selected scenario before any consequential commitment. No real purchase occurs in this demo.",
+      "Ask the user to approve a selected scenario before any consequential commitment. No real transaction occurs in this demo.",
     properties: {
       scenarioId: {
         type: "string",
@@ -184,6 +269,9 @@ export const TOOL_INPUT_SCHEMAS: Record<string, ToolInputSchema> = {
 export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   get_financial_state: { readOnlyHint: true },
   update_assumption: { readOnlyHint: false },
+  define_decision: { readOnlyHint: false },
+  set_protected_goal: { readOnlyHint: false },
+  remove_protected_goal: { readOnlyHint: false },
   fork_scenario: { readOnlyHint: false },
   compare_scenarios: { readOnlyHint: true },
   simulate_purchase: { readOnlyHint: true },

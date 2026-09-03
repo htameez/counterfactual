@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { FinancialState } from "@/types";
 import { formatCurrency } from "@/lib/financialCalculations";
-import { MapPin } from "lucide-react";
+import { Wallet } from "lucide-react";
 
 interface FinancialStatePanelProps {
   state: FinancialState;
@@ -14,10 +14,6 @@ const FIELD_LABELS: Record<keyof FinancialState, string> = {
   cashSavings: "Cash savings",
   monthlyTakeHome: "Monthly take-home income",
   monthlyLivingExpenses: "Monthly living expenses",
-  teslaPurchasePrice: "Tesla purchase price (incl. taxes & fees)",
-  emergencyFundMinimum: "Emergency fund minimum",
-  graduateSchoolReserve: "Graduate school reserve",
-  austinMovingCost: "Austin moving cost",
   monthlySavingsContribution: "Monthly savings contribution",
 };
 
@@ -25,10 +21,6 @@ const FIELD_DESCRIPTIONS: Record<keyof FinancialState, string> = {
   cashSavings: "Your current liquid savings",
   monthlyTakeHome: "Your monthly income after taxes",
   monthlyLivingExpenses: "Your monthly rent, food, utilities, etc.",
-  teslaPurchasePrice: "Total cost of the Tesla (all-in)",
-  emergencyFundMinimum: "The amount you want to keep as a safety net",
-  graduateSchoolReserve: "Amount you want to preserve for grad school",
-  austinMovingCost: "Estimated cost of relocating to Austin",
   monthlySavingsContribution:
     "How much you can save each month (income − expenses)",
 };
@@ -59,23 +51,17 @@ export default function FinancialStatePanel({
     setEditingField(null);
   };
 
-  const monthlySavings = state.monthlySavingsContribution;
-  const totalReserves =
-    state.emergencyFundMinimum +
-    state.graduateSchoolReserve +
-    state.austinMovingCost;
-
   return (
     <div className="border-b border-ink-700 bg-ink-900/60 p-6">
       <div className="mb-4 flex items-center gap-2">
-        <MapPin className="h-4 w-4 text-indigo-400" />
+        <Wallet className="h-4 w-4 text-indigo-400" />
         <h2 className="text-lg font-semibold text-ink-50">
           Where You Stand Today
         </h2>
       </div>
 
       {/* Quick Summary */}
-      <div className="mb-6 grid grid-cols-2 gap-4 rounded-lg border border-ink-700 bg-ink-850 p-4 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 rounded-lg border border-ink-700 bg-ink-850 p-4">
         <div>
           <p className="text-xs text-ink-400">Current cash</p>
           <p className="text-xl font-bold text-ink-50">
@@ -85,29 +71,9 @@ export default function FinancialStatePanel({
         <div>
           <p className="text-xs text-ink-400">Monthly savings</p>
           <p className="text-xl font-bold text-emerald-400">
-            {formatCurrency(monthlySavings)}
+            {formatCurrency(state.monthlySavingsContribution)}
           </p>
         </div>
-        <div>
-          <p className="text-xs text-ink-400">Protected goals</p>
-          <p className="text-xl font-bold text-indigo-300">
-            {formatCurrency(totalReserves)}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-ink-400">Tesla price</p>
-          <p className="text-xl font-bold text-ink-50">
-            {formatCurrency(state.teslaPurchasePrice)}
-          </p>
-        </div>
-      </div>
-
-      {/* Question Prompt */}
-      <div className="mb-6 rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-4">
-        <p className="text-base font-semibold text-indigo-100">
-          &ldquo;Can I buy this Tesla in cash without jeopardizing graduate
-          school, my emergency fund, or a possible move to Austin?&rdquo;
-        </p>
       </div>
 
       {/* Editable Fields */}

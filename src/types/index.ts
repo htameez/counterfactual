@@ -83,11 +83,32 @@ export interface FinancialState {
   cashSavings: number;
   monthlyTakeHome: number;
   monthlyLivingExpenses: number;
-  teslaPurchasePrice: number;
-  emergencyFundMinimum: number;
-  graduateSchoolReserve: number;
-  austinMovingCost: number;
   monthlySavingsContribution: number;
+}
+
+/** The decision a user is actually weighing — theirs to define, not ours. */
+export interface Decision {
+  name: string;
+  description: string;
+  baseCost: number;
+}
+
+/**
+ * A user-defined reserve to protect (an emergency fund, a deposit, a
+ * degree — anything). Goals are protected in the order they appear: each
+ * one must be covered on top of every goal before it.
+ */
+export interface ProtectedGoal {
+  id: string;
+  name: string;
+  targetAmount: number;
+}
+
+export interface GoalStatus {
+  id: string;
+  name: string;
+  targetAmount: number;
+  preserved: boolean;
 }
 
 export interface Scenario {
@@ -97,9 +118,7 @@ export interface Scenario {
   waitMonths: number;
   cashAfterPurchase: number;
   cashAfterWait: number;
-  emergencyFundPreserved: boolean;
-  graduateSchoolPreserved: boolean;
-  movingFundsPreserved: boolean;
+  goalStatuses: GoalStatus[];
   totalRemainingBuffer: number;
   riskLevel: "Low" | "Medium" | "High";
   explanation: string;

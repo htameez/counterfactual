@@ -2,16 +2,22 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import type {
+  Decision,
   FinancialState,
   FlightRecorderEntry,
+  ProtectedGoal,
   Scenario,
   ToolStatus,
   WebMCPTool,
 } from "@/types";
 import {
+  DEFAULT_DECISION,
   DEFAULT_FINANCIAL_STATE,
-  SCENARIO_CONFIGS,
+  DEFAULT_PROTECTED_GOALS,
+  DEFAULT_SCENARIO_WAIT_MONTHS,
+  buildScenarioConfigs,
   calculateScenario,
+  defaultAlternativeCost,
 } from "@/lib/financialCalculations";
 import { WebMCPClient } from "@/lib/webmcp";
 import {
@@ -20,6 +26,7 @@ import {
   getToolPolicy,
 } from "@/lib/riskPolicy";
 import FinancialStatePanel from "./FinancialStatePanel";
+import DecisionPanel from "./DecisionPanel";
 import ScenarioComparison from "./ScenarioComparison";
 import FlightRecorder from "./FlightRecorder";
 import ConfirmationModal from "./ConfirmationModal";
@@ -32,6 +39,14 @@ type ToolHandler = (args: unknown, options?: { signal?: AbortSignal }) => Promis
 export default function Dashboard() {
   const [financialState, setFinancialState] =
     useState<FinancialState>(DEFAULT_FINANCIAL_STATE);
+  const [decision, setDecision] = useState<Decision>(DEFAULT_DECISION);
+  const [protectedGoals, setProtectedGoals] = useState<ProtectedGoal[]>(
+    DEFAULT_PROTECTED_GOALS
+  );
+  const [scenarioParams, setScenarioParams] = useState({
+    waitMonths: DEFAULT_SCENARIO_WAIT_MONTHS,
+    alternativeCost: defaultAlternativeCost(DEFAULT_DECISION.baseCost),
+  });
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [flightLog, setFlightLog] = useState<FlightRecorderEntry[]>([]);
   const [webmcpClient, setWebMCPClient] = useState<WebMCPClient | null>(null);
@@ -49,6 +64,16 @@ export default function Dashboard() {
     financialStateRef.current = financialState;
   }, [financialState]);
 
+  const decisionRef = useRef(decision);
+  useEffect(() => {
+    decisionRef.current = decision;
+  }, [decision]);
+
+  const protectedGoalsRef = useRef(protectedGoals);
+  useEffect(() => {
+    protectedGoalsRef.current = protectedGoals;
+  }, [protectedGoals]);
+
   const scenariosRef = useRef(scenarios);
   useEffect(() => {
     scenariosRef.current = scenarios;
@@ -56,21 +81,44 @@ export default function Dashboard() {
 
   const toolHandlersRef = useRef<Record<string, ToolHandler>>({});
 
-  const updateScenarios = useCallback((state: FinancialState) => {
-    const updated = SCENARIO_CONFIGS.map((config) => {
-      const calculation = calculateScenario(
-        state,
-        config.purchasePrice,
-        config.waitMonths
+  // Recompute every existing scenario's numbers in place (financial state
+  // or protected goals changed, but the futures themselves didn't).
+  const refreshAllScenarios = useCallback(
+    (state: FinancialState, goals: ProtectedGoal[]) => {
+      setScenarios((prev) =>
+        prev.map((s) => ({
+          ...s,
+          ...calculateScenario(state, goals, s.purchasePrice, s.waitMonths),
+        }))
       );
-      return {
+    },
+    []
+  );
+
+  // Rebuild the three canonical futures from scratch — used when the
+  // *decision* itself changes, since old prices no longer mean anything.
+  const resetScenariosForDecision = useCallback(
+    (
+      state: FinancialState,
+      goals: ProtectedGoal[],
+      activeDecision: Decision,
+      waitMonths: number,
+      alternativeCost: number
+    ) => {
+      const rebuilt = buildScenarioConfigs(
+        activeDecision,
+        waitMonths,
+        alternativeCost
+      ).map((config) => ({
         id: `scenario-${config.name}`,
         name: config.name,
-        ...calculation,
-      };
-    });
-    setScenarios(updated);
-  }, []);
+        ...calculateScenario(state, goals, config.purchasePrice, config.waitMonths),
+      }));
+      setScenarios(rebuilt);
+      setRecommendedScenario(null);
+    },
+    []
+  );
 
   const addFlightLogEntry = useCallback(
     (
@@ -152,11 +200,12 @@ export default function Dashboard() {
   const initializeWebMCP = useCallback(async () => {
     const client = new WebMCPClient();
 
-    // Register all tools
     const handlers: Record<string, ToolHandler> = {
       get_financial_state: async () => {
         return {
           ...financialStateRef.current,
+          decision: decisionRef.current,
+          protectedGoals: protectedGoalsRef.current,
           timestamp: new Date().toISOString(),
         };
       },
@@ -164,50 +213,140 @@ export default function Dashboard() {
       update_assumption: async (args: any) => {
         const { field, value } = args;
 
-        // Validate field name and value
         const validFields = Object.keys(DEFAULT_FINANCIAL_STATE);
         if (!validFields.includes(field)) {
           throw new Error(`Invalid field: ${field}`);
         }
-
         if (typeof value !== "number" || value < 0 || !isFinite(value)) {
           throw new Error(`Invalid value for ${field}: must be non-negative`);
         }
 
         const updated = { ...financialStateRef.current, [field]: value };
         setFinancialState(updated);
-
-        // Recalculate scenarios
-        updateScenarios(updated);
+        refreshAllScenarios(updated, protectedGoalsRef.current);
 
         return { success: true, field, value };
+      },
+
+      define_decision: async (args: any) => {
+        const { name, description, baseCost } = args;
+
+        if (typeof name !== "string" || name.trim().length === 0) {
+          throw new Error("name must be a non-empty string");
+        }
+        if (typeof baseCost !== "number" || !isFinite(baseCost) || baseCost < 0) {
+          throw new Error("baseCost must be a non-negative finite number");
+        }
+
+        const newDecision: Decision = {
+          name: name.trim(),
+          description: typeof description === "string" ? description.trim() : "",
+          baseCost,
+        };
+        const altCost = defaultAlternativeCost(baseCost);
+
+        setDecision(newDecision);
+        decisionRef.current = newDecision;
+        setScenarioParams({ waitMonths: DEFAULT_SCENARIO_WAIT_MONTHS, alternativeCost: altCost });
+        resetScenariosForDecision(
+          financialStateRef.current,
+          protectedGoalsRef.current,
+          newDecision,
+          DEFAULT_SCENARIO_WAIT_MONTHS,
+          altCost
+        );
+
+        return newDecision;
+      },
+
+      set_protected_goal: async (args: any) => {
+        const { name, targetAmount } = args;
+
+        if (typeof name !== "string" || name.trim().length === 0) {
+          throw new Error("name must be a non-empty string");
+        }
+        if (
+          typeof targetAmount !== "number" ||
+          !isFinite(targetAmount) ||
+          targetAmount < 0
+        ) {
+          throw new Error("targetAmount must be a non-negative finite number");
+        }
+
+        const trimmed = name.trim();
+        const current = protectedGoalsRef.current;
+        const existingIdx = current.findIndex(
+          (g) => g.name.toLowerCase() === trimmed.toLowerCase()
+        );
+
+        let updatedGoals: ProtectedGoal[];
+        if (existingIdx >= 0) {
+          updatedGoals = [...current];
+          updatedGoals[existingIdx] = { ...updatedGoals[existingIdx], targetAmount };
+        } else {
+          updatedGoals = [
+            ...current,
+            { id: `goal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, name: trimmed, targetAmount },
+          ];
+        }
+
+        setProtectedGoals(updatedGoals);
+        refreshAllScenarios(financialStateRef.current, updatedGoals);
+
+        return { goals: updatedGoals };
+      },
+
+      remove_protected_goal: async (args: any) => {
+        const { name } = args;
+
+        if (typeof name !== "string" || name.trim().length === 0) {
+          throw new Error("name must be a non-empty string");
+        }
+
+        const trimmed = name.trim().toLowerCase();
+        const current = protectedGoalsRef.current;
+        if (!current.some((g) => g.name.toLowerCase() === trimmed)) {
+          throw new Error(`No protected goal named "${name}"`);
+        }
+
+        const updatedGoals = current.filter(
+          (g) => g.name.toLowerCase() !== trimmed
+        );
+        setProtectedGoals(updatedGoals);
+        refreshAllScenarios(financialStateRef.current, updatedGoals);
+
+        return { goals: updatedGoals };
       },
 
       fork_scenario: async (args: any) => {
         const { name, purchasePrice, waitMonths } = args;
 
-        if (typeof purchasePrice !== "number" || purchasePrice < 0) {
+        if (typeof name !== "string" || name.trim().length === 0) {
+          throw new Error("name must be a non-empty string");
+        }
+        if (typeof purchasePrice !== "number" || !isFinite(purchasePrice) || purchasePrice < 0) {
           throw new Error("Invalid purchasePrice");
         }
-        if (typeof waitMonths !== "number" || waitMonths < 0) {
+        if (typeof waitMonths !== "number" || !isFinite(waitMonths) || waitMonths < 0) {
           throw new Error("Invalid waitMonths");
         }
 
-        const id = `scenario-${Date.now()}`;
         const calculation = calculateScenario(
           financialStateRef.current,
+          protectedGoalsRef.current,
           purchasePrice,
           waitMonths
         );
 
-        const scenario: Scenario = {
-          id,
-          name,
-          ...calculation,
-        };
-
+        let resultScenario!: Scenario;
         setScenarios((prev) => {
           const existing = prev.findIndex((s) => s.name === name);
+          const scenario: Scenario = {
+            id: existing >= 0 ? prev[existing].id : `scenario-${Date.now()}`,
+            name,
+            ...calculation,
+          };
+          resultScenario = scenario;
           if (existing >= 0) {
             const updated = [...prev];
             updated[existing] = scenario;
@@ -216,7 +355,7 @@ export default function Dashboard() {
           return [...prev, scenario];
         });
 
-        return scenario;
+        return resultScenario;
       },
 
       compare_scenarios: async () => {
@@ -225,15 +364,17 @@ export default function Dashboard() {
           return { recommended: null, all: [] };
         }
 
-        // Find the scenario with lowest risk and most preserved goals
-        const scored = currentScenarios.map((s) => ({
-          scenario: s,
-          score:
-            (s.emergencyFundPreserved ? 3 : 0) +
-            (s.graduateSchoolPreserved ? 2 : 0) +
-            (s.movingFundsPreserved ? 1 : 0) +
-            (s.riskLevel === "Low" ? 10 : s.riskLevel === "Medium" ? 5 : 0),
-        }));
+        // Higher-priority goals (earlier in the list) weigh more heavily.
+        const scored = currentScenarios.map((s) => {
+          const goalScore = s.goalStatuses.reduce(
+            (sum, g, idx) =>
+              sum + (g.preserved ? s.goalStatuses.length - idx : 0),
+            0
+          );
+          const riskScore =
+            s.riskLevel === "Low" ? 10 : s.riskLevel === "Medium" ? 5 : 0;
+          return { scenario: s, score: goalScore + riskScore };
+        });
 
         const recommended = scored.sort((a, b) => b.score - a.score)[0];
 
@@ -261,9 +402,7 @@ export default function Dashboard() {
             initialCash: financialStateRef.current.cashSavings,
             purchaseAmount: scenario.purchasePrice,
             remainingCash: scenario.cashAfterPurchase,
-            emergencyFundSafe: scenario.emergencyFundPreserved,
-            graduateSchoolSafe: scenario.graduateSchoolPreserved,
-            movingFundsSafe: scenario.movingFundsPreserved,
+            goalStatuses: scenario.goalStatuses,
           },
         };
       },
@@ -286,7 +425,6 @@ export default function Dashboard() {
     };
     toolHandlersRef.current = handlers;
 
-    // Register each tool
     for (const [toolName, handler] of Object.entries(handlers)) {
       const policy = getToolPolicy(toolName);
       const inputSchema = getToolInputSchema(toolName);
@@ -315,7 +453,7 @@ export default function Dashboard() {
 
     setWebMCPClient(client);
     return client;
-  }, [executeToolWithRecorder, updateScenarios]);
+  }, [executeToolWithRecorder, refreshAllScenarios, resetScenariosForDecision]);
 
   const runAgentAnalysis = useCallback(async () => {
     if (!webmcpClient) return;
@@ -330,7 +468,7 @@ export default function Dashboard() {
       const tools = await webmcpClient.discoverTools();
       updateFlightLogEntry(entry1.id, { status: "Executed", result: tools });
 
-      // Step 2: Get financial state
+      // Step 2: Get financial state (sees the *current* decision + goals)
       await new Promise((r) => setTimeout(r, 500));
       await executeToolWithRecorder(
         "get_financial_state",
@@ -339,8 +477,13 @@ export default function Dashboard() {
         toolHandlersRef.current.get_financial_state
       );
 
-      // Step 3-5: Fork scenarios
-      for (const config of SCENARIO_CONFIGS) {
+      // Step 3-5: Fork the three canonical futures for the active decision
+      const configs = buildScenarioConfigs(
+        decisionRef.current,
+        scenarioParams.waitMonths,
+        scenarioParams.alternativeCost
+      );
+      for (const config of configs) {
         await new Promise((r) => setTimeout(r, 800));
         await executeToolWithRecorder(
           "fork_scenario",
@@ -367,10 +510,22 @@ export default function Dashboard() {
     } finally {
       setIsAgentRunning(false);
     }
-  }, [webmcpClient, addFlightLogEntry, executeToolWithRecorder, updateFlightLogEntry]);
+  }, [
+    webmcpClient,
+    addFlightLogEntry,
+    executeToolWithRecorder,
+    updateFlightLogEntry,
+    scenarioParams,
+  ]);
 
   const handleReset = useCallback(() => {
     setFinancialState(DEFAULT_FINANCIAL_STATE);
+    setDecision(DEFAULT_DECISION);
+    setProtectedGoals(DEFAULT_PROTECTED_GOALS);
+    setScenarioParams({
+      waitMonths: DEFAULT_SCENARIO_WAIT_MONTHS,
+      alternativeCost: defaultAlternativeCost(DEFAULT_DECISION.baseCost),
+    });
     setScenarios([]);
     setFlightLog([]);
     setRecommendedScenario(null);
@@ -380,7 +535,6 @@ export default function Dashboard() {
   const handleSimulateScenario = useCallback(
     async (scenarioId: string) => {
       if (!webmcpClient) return;
-
       try {
         await executeToolWithRecorder(
           "simulate_purchase",
@@ -396,13 +550,75 @@ export default function Dashboard() {
   const handleCommitScenario = useCallback(
     async (scenarioId: string) => {
       if (!webmcpClient) return;
-
       try {
         await executeToolWithRecorder(
           "commit_scenario",
           { scenarioId },
           "user",
           toolHandlersRef.current.commit_scenario
+        );
+      } catch {}
+    },
+    [webmcpClient, executeToolWithRecorder]
+  );
+
+  // Lets the user fork a future entirely of their own design — not one of
+  // the three defaults — through the exact same tool + Flight Recorder
+  // trail the agent uses.
+  const handleForkCustomScenario = useCallback(
+    async (name: string, purchasePrice: number, waitMonths: number) => {
+      if (!webmcpClient) return;
+      try {
+        await executeToolWithRecorder(
+          "fork_scenario",
+          { name, purchasePrice, waitMonths },
+          "user",
+          toolHandlersRef.current.fork_scenario
+        );
+      } catch {}
+    },
+    [webmcpClient, executeToolWithRecorder]
+  );
+
+  const handleDefineDecision = useCallback(
+    async (name: string, description: string, baseCost: number) => {
+      if (!webmcpClient) return;
+      try {
+        await executeToolWithRecorder(
+          "define_decision",
+          { name, description, baseCost },
+          "user",
+          toolHandlersRef.current.define_decision
+        );
+      } catch {}
+    },
+    [webmcpClient, executeToolWithRecorder]
+  );
+
+  const handleSetProtectedGoal = useCallback(
+    async (name: string, targetAmount: number) => {
+      if (!webmcpClient) return;
+      try {
+        await executeToolWithRecorder(
+          "set_protected_goal",
+          { name, targetAmount },
+          "user",
+          toolHandlersRef.current.set_protected_goal
+        );
+      } catch {}
+    },
+    [webmcpClient, executeToolWithRecorder]
+  );
+
+  const handleRemoveProtectedGoal = useCallback(
+    async (name: string) => {
+      if (!webmcpClient) return;
+      try {
+        await executeToolWithRecorder(
+          "remove_protected_goal",
+          { name },
+          "user",
+          toolHandlersRef.current.remove_protected_goal
         );
       } catch {}
     },
@@ -430,7 +646,13 @@ export default function Dashboard() {
     if (hasInitialized.current) return;
     hasInitialized.current = true;
 
-    updateScenarios(DEFAULT_FINANCIAL_STATE);
+    resetScenariosForDecision(
+      DEFAULT_FINANCIAL_STATE,
+      DEFAULT_PROTECTED_GOALS,
+      DEFAULT_DECISION,
+      DEFAULT_SCENARIO_WAIT_MONTHS,
+      defaultAlternativeCost(DEFAULT_DECISION.baseCost)
+    );
 
     let cancelled = false;
     let clientForCleanup: WebMCPClient | null = null;
@@ -484,9 +706,9 @@ export default function Dashboard() {
               </span>
             </div>
             <p className="mt-0.5 text-sm text-ink-400">
-              Fork your next big decision into parallel futures, compare them
-              side by side, and decide together with an agent — before
-              anything is committed.
+              Define your own decision, fork it into parallel futures,
+              compare them side by side, and decide together with an agent —
+              before anything is committed.
             </p>
           </div>
           <WebMCPStatus contextType={webmcpClient?.getContextType() || "unavailable"} />
@@ -502,8 +724,16 @@ export default function Dashboard() {
             onUpdate={(field, value) => {
               const updated = { ...financialState, [field]: value };
               setFinancialState(updated);
-              updateScenarios(updated);
+              refreshAllScenarios(updated, protectedGoals);
             }}
+          />
+
+          <DecisionPanel
+            decision={decision}
+            protectedGoals={protectedGoals}
+            onDefineDecision={handleDefineDecision}
+            onSetGoal={handleSetProtectedGoal}
+            onRemoveGoal={handleRemoveProtectedGoal}
           />
 
           <ScenarioComparison
@@ -512,6 +742,7 @@ export default function Dashboard() {
             currentCash={financialState.cashSavings}
             onSimulate={handleSimulateScenario}
             onCommit={handleCommitScenario}
+            onForkCustom={handleForkCustomScenario}
           />
 
           <AgentControls
