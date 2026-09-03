@@ -9,6 +9,9 @@ build/
 .cache/
 coverage/
 
+# webmcp-evals reports
+.evals/
+
 # Environment
 .env
 .env.local

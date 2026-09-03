@@ -1,0 +1,188 @@
+[
+  {
+    "name": "Read the current financial state",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "What's my current financial situation?"
+      }
+    ],
+    "expectedCall": [{ "functionName": "get_financial_state", "arguments": {} }]
+  },
+
+  {
+    "name": "Correct a financial assumption",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Actually, I have $80,000 in savings, not $72,000."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "update_assumption",
+        "arguments": { "field": "cashSavings", "value": 80000 }
+      }
+    ]
+  },
+
+  {
+    "name": "Replace the example decision with a real one",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Forget the Tesla — I'm actually deciding whether to take 3 months of unpaid leave to write a novel. That would cost me about $15,000 in lost income and expenses."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "define_decision",
+        "arguments": {
+          "name": { "$contains": "leave" },
+          "baseCost": 15000
+        }
+      }
+    ]
+  },
+
+  {
+    "name": "Protect a goal the app never heard of before",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "I don't want this to touch my wedding fund — keep $8,000 safe for that."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "set_protected_goal",
+        "arguments": { "name": { "$contains": "wedding" }, "targetAmount": 8000 }
+      }
+    ]
+  },
+
+  {
+    "name": "Stop protecting a goal that no longer applies",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "The Austin move is off — don't worry about protecting that fund anymore."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "remove_protected_goal",
+        "arguments": { "name": "Austin moving fund" }
+      }
+    ]
+  },
+
+  {
+    "name": "Fork a future that isn't one of the three defaults",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "What if I waited 4 months and did it for $38,000 instead?"
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "fork_scenario",
+        "arguments": {
+          "purchasePrice": 38000,
+          "waitMonths": 4,
+          "name": { "$any": true }
+        }
+      }
+    ]
+  },
+
+  {
+    "name": "Compare the forked futures",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Which of these options looks best overall?"
+      }
+    ],
+    "expectedCall": [{ "functionName": "compare_scenarios", "arguments": {} }]
+  },
+
+  {
+    "name": "Inspect one future in detail without committing",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Show me exactly what happens if I do this right now."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "simulate_purchase",
+        "arguments": { "scenarioId": "scenario-Do It Now" }
+      }
+    ]
+  },
+
+  {
+    "name": "Ask to commit — must stop at approval, never execute silently",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Let's go with the cheaper alternative — I want to commit to that one."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "commit_scenario",
+        "arguments": { "scenarioId": "scenario-Cheaper Alternative" }
+      }
+    ]
+  },
+
+  {
+    "name": "End-to-end: describe a new decision from scratch, protect a goal, fork it, and compare",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "I'm thinking about putting a $25,000 deposit on a house. I don't want to touch my $10,000 emergency fund. Fork a scenario for doing it right now, and tell me how it stacks up against my other options."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "define_decision",
+        "arguments": { "baseCost": 25000, "name": { "$any": true } }
+      },
+      {
+        "unordered": [
+          {
+            "functionName": "set_protected_goal",
+            "arguments": {
+              "name": { "$contains": "emergency" },
+              "targetAmount": 10000
+            }
+          },
+          {
+            "functionName": "fork_scenario",
+            "arguments": {
+              "purchasePrice": 25000,
+              "waitMonths": 0,
+              "name": { "$any": true }
+            }
+          }
+        ]
+      },
+      { "functionName": "compare_scenarios", "arguments": {} }
+    ]
+  }
+]

@@ -298,6 +298,27 @@ npm run lint
 npm run build
 ```
 
+## WebMCP Evals
+
+Type-checking and linting prove the code compiles; they say nothing about whether the tools actually *work* when a real caller invokes them the way `document.modelContext` expects — or whether their descriptions are clear enough for a model to pick the right one. [`webmcp-evals`](https://developer.chrome.com/docs/ai/webmcp/evals) (Google's WebMCP evaluation CLI) tests both, and [`evals/evals.json`](evals/evals.json) has one case per tool plus an end-to-end chain that defines a new decision, protects a goal, forks a future, and compares — all from a single natural-language message.
+
+```bash
+# Deterministic — executes the exact expected tool calls against a live page,
+# no LLM or API key required. Good for CI / a pre-submission sanity check.
+npm run dev            # in one terminal
+npm run eval:smoke      # in another
+
+# Probabilistic — a real model reads the natural-language messages in
+# evals.json and decides which tools to call; scores it against the
+# expected calls. Needs an API key: put GOOGLE_AI / OPENAI_API_KEY /
+# ANTHROPIC_API_KEY in a .env file first.
+npm run eval:browser
+```
+
+Both scripts assume regular Chrome (`--chrome-channel chrome`) since Canary isn't installed everywhere by default; edit the script if you have Canary and prefer it.
+
+**This is not theoretical** — writing these evals caught a real bug: `fork_scenario`'s return value came back `undefined` when invoked through the actual registered `document.modelContext` path, even though the in-app UI (which calls the same handlers through a different, non-WebMCP-wrapped code path) never showed a symptom. An external agent calling `fork_scenario` for real would have silently gotten nothing back. Fixed in [`Dashboard.tsx`](src/components/Dashboard.tsx) by computing the scenario before setting state instead of capturing it from inside a `setState` updater callback — smoke mode passes 13/13 steps now, verified against a live page, not just against types.
+
 ## 60–90 Second Demo Script
 
 1. **Show the start state:** "Counterfactual starts with default assumptions: $72k saved, $6k monthly income, $3.2k expenses."
@@ -334,6 +355,7 @@ npm run build
 ✓ **WebMCP status indicator** – Displays whether using native, polyfilled, legacy, or Demo Bridge  
 ✓ **Genuinely external-visible tools** – `@mcp-b/webmcp-polyfill` puts a real `document.modelContext` on the page, so outside tools (browser extensions, other agents) can discover and call it, not just our own in-page demo  
 ✓ **Human-verification gate on commitment** – `commit_scenario`'s approval modal requires typing a freshly generated code before Approve unlocks, so a UI-driving agent can't click straight through it the way it could a plain button  
+✓ **WebMCP evals** – `evals/evals.json` tests every tool through the real `document.modelContext` path (not just our own UI's code path) — `npm run eval:smoke` runs it deterministically with no API key; it already caught and fixed one real bug  
 ✓ **Editable assumptions** – User or agent can update financial parameters; scenarios recalculate instantly  
 ✓ **TypeScript type safety** – Narrowly scoped custom type declarations for experimental WebMCP  
 ✓ **Responsive design** – Polished on desktop; mobile support included  
@@ -382,6 +404,7 @@ A dark, board-like interface — the central metaphor is **forking paths**, made
 - **Charts:** Recharts (lightweight bar chart for scenario comparison)
 - **Icons:** Lucide React
 - **WebMCP runtime:** [`@mcp-b/webmcp-polyfill`](https://www.npmjs.com/package/@mcp-b/webmcp-polyfill) — puts a real `document.modelContext` on the page for genuine external discoverability
+- **WebMCP evals:** [`webmcp-evals`](https://developer.chrome.com/docs/ai/webmcp/evals) — tests the actual registered tools against a live page
 - **State:** Client-side React hooks (no database)
 
 ## Submission Summary

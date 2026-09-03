@@ -338,24 +338,27 @@ export default function Dashboard() {
           waitMonths
         );
 
-        let resultScenario!: Scenario;
-        setScenarios((prev) => {
-          const existing = prev.findIndex((s) => s.name === name);
-          const scenario: Scenario = {
-            id: existing >= 0 ? prev[existing].id : `scenario-${Date.now()}`,
-            name,
-            ...calculation,
-          };
-          resultScenario = scenario;
-          if (existing >= 0) {
-            const updated = [...prev];
-            updated[existing] = scenario;
-            return updated;
-          }
-          return [...prev, scenario];
-        });
+        // Compute the result in this scope, then set state from it — rather
+        // than mutating a captured variable from inside setScenarios'
+        // updater and reading it right after. Reads through the ref (kept
+        // live by the sync effect above) instead of a functional updater,
+        // matching set_protected_goal/remove_protected_goal.
+        const existingIdx = scenariosRef.current.findIndex((s) => s.name === name);
+        const scenario: Scenario = {
+          id: existingIdx >= 0 ? scenariosRef.current[existingIdx].id : `scenario-${Date.now()}`,
+          name,
+          ...calculation,
+        };
 
-        return resultScenario;
+        if (existingIdx >= 0) {
+          const updated = [...scenariosRef.current];
+          updated[existingIdx] = scenario;
+          setScenarios(updated);
+        } else {
+          setScenarios([...scenariosRef.current, scenario]);
+        }
+
+        return scenario;
       },
 
       compare_scenarios: async () => {
