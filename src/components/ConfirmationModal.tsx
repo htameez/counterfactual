@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { FlightRecorderEntry, Scenario } from "@/types";
 import { formatCurrency } from "@/lib/financialCalculations";
-import { AlertTriangle, Check, X } from "lucide-react";
+import { AlertTriangle, Check, ShieldCheck, X } from "lucide-react";
 
 interface ConfirmationModalProps {
   entry: FlightRecorderEntry;
@@ -21,6 +22,36 @@ function isScenarioResult(
   );
 }
 
+// Unambiguous charset (no 0/O, 1/I) for a code someone has to actually read
+// off the screen and type back, not just click through.
+const CODE_CHARS = "ACDEFGHJKMNPQRTUVWXY346789";
+const DWELL_MS = 1800;
+
+function generateCode(length = 4): string {
+  let code = "";
+  for (let i = 0; i < length; i++) {
+    code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  }
+  return code;
+}
+
+/**
+ * Human-verification gate for the one action in this app that's supposed to
+ * require a real person: approving a financial commitment.
+ *
+ * WebMCP itself already refuses to let `commit_scenario` execute on its
+ * own — it stops at "Awaiting Approval" and this modal is the only path
+ * past that. But the modal's Approve button is still just a DOM button,
+ * and anything driving the browser the way a person does (a computer-use
+ * agent included) can click a DOM button. So instead of trying to detect
+ * *who* is clicking — which isn't reliably possible from inside a web
+ * page — this requires proof that whoever is clicking actually read a
+ * piece of on-screen state that changes every time: a short code,
+ * generated fresh for this approval, that must be typed back before the
+ * button will do anything. A scripted clicker can't satisfy that blind.
+ * A capable multimodal agent could still read and type it — this raises
+ * the bar, it doesn't guarantee a human, and the code/README say so.
+ */
 export default function ConfirmationModal({
   entry,
   onApprove,
@@ -35,6 +66,38 @@ export default function ConfirmationModal({
       ]
     : [];
   const compromised = goalRows.filter((g) => !g.preserved);
+
+  const [confirmationCode, setConfirmationCode] = useState(() => generateCode());
+  const [typedCode, setTypedCode] = useState("");
+  const [dwellElapsed, setDwellElapsed] = useState(false);
+  const [blockedAttempt, setBlockedAttempt] = useState(false);
+
+  // Reset the gate whenever a new approval request comes in — fresh code,
+  // fresh dwell timer — and require a short deliberate pause before the
+  // button can even be pressed.
+  useEffect(() => {
+    setConfirmationCode(generateCode());
+    setTypedCode("");
+    setDwellElapsed(false);
+    setBlockedAttempt(false);
+    const timer = setTimeout(() => setDwellElapsed(true), DWELL_MS);
+    return () => clearTimeout(timer);
+  }, [entry.id]);
+
+  const codeMatches = typedCode.trim().toUpperCase() === confirmationCode;
+  const canApprove = dwellElapsed && codeMatches;
+
+  const handleApproveClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // Defense in depth: ignore clicks that weren't dispatched by a real
+    // input event (e.g. a script calling button.click() directly). This
+    // does not catch OS/CDP-level automation, which browsers still report
+    // as trusted — the code + dwell timer above are the real gate.
+    if (!e.isTrusted || !canApprove) {
+      setBlockedAttempt(true);
+      return;
+    }
+    onApprove();
+  };
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-50">
@@ -57,7 +120,7 @@ export default function ConfirmationModal({
           </p>
 
           {scenario ? (
-            <div className="mb-6 space-y-3">
+            <div className="mb-4 space-y-3">
               <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
                 <p className="text-xs font-medium uppercase tracking-wide text-red-300">
                   Selected future
@@ -113,7 +176,7 @@ export default function ConfirmationModal({
               </div>
             </div>
           ) : (
-            <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+            <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
               <h3 className="mb-3 font-semibold text-red-200">
                 Action: {entry.toolName}
               </h3>
@@ -133,7 +196,7 @@ export default function ConfirmationModal({
           )}
 
           {/* Important Notice */}
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
             <p className="text-xs font-semibold text-amber-200 mb-1">
               IMPORTANT NOTICE
             </p>
@@ -142,6 +205,42 @@ export default function ConfirmationModal({
               transaction will occur. This action is recorded in the Flight
               Recorder for review and validation purposes only.
             </p>
+          </div>
+
+          {/* Human verification */}
+          <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-4">
+            <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-indigo-200">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Human verification required to approve
+            </p>
+            <p className="mb-3 text-xs text-indigo-200/80">
+              Type the code shown below. It&apos;s generated fresh for this
+              approval, so nothing can click through this button blind.
+            </p>
+            <div className="flex items-center gap-3">
+              <span className="select-none rounded border border-ink-600 bg-ink-900 px-3 py-1.5 font-mono text-sm tracking-[0.3em] text-ink-50">
+                {confirmationCode}
+              </span>
+              <input
+                value={typedCode}
+                onChange={(e) => setTypedCode(e.target.value)}
+                placeholder="Type code"
+                maxLength={4}
+                autoComplete="off"
+                spellCheck={false}
+                className="flex-1 rounded border border-ink-600 bg-ink-800 px-3 py-1.5 text-sm uppercase tracking-[0.2em] text-ink-50 placeholder:normal-case placeholder:tracking-normal placeholder:text-ink-500 focus:border-indigo-400 focus:outline-none"
+              />
+            </div>
+            {!dwellElapsed && (
+              <p className="mt-2 text-[11px] text-ink-400">
+                Take a moment — approval unlocks in a second.
+              </p>
+            )}
+            {blockedAttempt && !canApprove && dwellElapsed && (
+              <p className="mt-2 text-[11px] text-red-300">
+                Code doesn&apos;t match yet — copy it exactly as shown above.
+              </p>
+            )}
           </div>
         </div>
 
@@ -154,10 +253,19 @@ export default function ConfirmationModal({
             Reject
           </button>
           <button
-            onClick={onApprove}
-            className="flex-1 rounded bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500"
+            onClick={handleApproveClick}
+            disabled={!canApprove}
+            className={`flex-1 rounded px-4 py-2 text-sm font-medium transition-colors ${
+              canApprove
+                ? "bg-red-600 text-white hover:bg-red-500"
+                : "cursor-not-allowed bg-ink-700 text-ink-400"
+            }`}
           >
-            Approve Commitment
+            {canApprove
+              ? "Approve Commitment"
+              : dwellElapsed
+                ? "Enter code to approve"
+                : "Reviewing…"}
           </button>
         </div>
       </div>
