@@ -21,6 +21,21 @@ export interface ToolDefinition {
 }
 
 /**
+ * What a caller hands to registerTool() — deliberately shaped like the
+ * standard `document.modelContext.registerTool({ name, description,
+ * inputSchema, execute })` dictionary, since that's exactly what this
+ * becomes (plus title/annotations) once it reaches the real API.
+ */
+export interface ToolRegistration {
+  name: string;
+  title: string;
+  description: string;
+  inputSchema: unknown;
+  annotations: ToolAnnotations;
+  execute: (args: unknown, options?: { signal?: AbortSignal }) => Promise<unknown> | unknown;
+}
+
+/**
  * Detects which WebMCP context is available
  */
 export function detectWebMCPContext(): WebMCPContextType {
@@ -60,25 +75,20 @@ export class DemoBridge {
     }
   > = new Map();
 
-  async registerTool(
-    name: string,
-    title: string,
-    description: string,
-    inputSchema: unknown,
-    annotations: ToolAnnotations,
-    handler: (args: unknown, options?: { signal?: AbortSignal }) => Promise<unknown> | unknown
-  ): Promise<void> {
+  async registerTool(tool: ToolRegistration): Promise<void> {
+    const { name, title, description, inputSchema, annotations, execute } = tool;
+
     const definition: ToolDefinition = {
       name,
       title,
       description,
       inputSchema: inputSchema as ToolInputSchema,
       annotations,
-      handler,
+      handler: execute,
     };
 
     const asyncHandler = async (args: unknown) => {
-      const result = await handler(args, { signal: new AbortController().signal });
+      const result = await execute(args, { signal: new AbortController().signal });
       return result;
     };
 
@@ -133,28 +143,16 @@ export class WebMCPClient {
     return this.contextType;
   }
 
-  async registerTool(
-    name: string,
-    title: string,
-    description: string,
-    inputSchema: unknown,
-    annotations: ToolAnnotations,
-    handler: (args: unknown, options?: { signal?: AbortSignal }) => Promise<unknown> | unknown
-  ): Promise<void> {
+  async registerTool(tool: ToolRegistration): Promise<void> {
+    const { name, title, description, inputSchema, annotations, execute } = tool;
+
     // Prevent duplicate registration (React Strict Mode safety)
     if (this.registeredTools.has(name)) {
       console.warn(`Tool already registered: ${name}`);
       return;
     }
 
-    await this.bridge.registerTool(
-      name,
-      title,
-      description,
-      inputSchema,
-      annotations,
-      handler
-    );
+    await this.bridge.registerTool(tool);
 
     if (this.context) {
       const modelContextTool: WebMCPTool = {
@@ -163,7 +161,7 @@ export class WebMCPClient {
         description,
         inputSchema: inputSchema as ToolInputSchema,
         annotations,
-        execute: handler,
+        execute,
       };
 
       try {

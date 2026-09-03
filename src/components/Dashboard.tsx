@@ -430,21 +430,21 @@ export default function Dashboard() {
       const inputSchema = getToolInputSchema(toolName);
       if (policy && inputSchema) {
         try {
-          await client.registerTool(
-            toolName,
-            policy.name,
-            policy.description,
+          await client.registerTool({
+            name: toolName,
+            title: policy.name,
+            description: policy.description,
             inputSchema,
-            getToolAnnotations(toolName),
-            (args, options) =>
+            annotations: getToolAnnotations(toolName),
+            execute: (args, options) =>
               executeToolWithRecorder(
                 toolName,
                 args,
                 "agent",
                 (toolArgs) => handler(toolArgs, options),
                 options
-              )
-          );
+              ),
+          });
         } catch (error) {
           console.warn(`Failed to register tool ${toolName}:`, error);
         }
