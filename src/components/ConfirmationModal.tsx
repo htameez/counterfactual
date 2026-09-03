@@ -1,25 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { FlightRecorderEntry, Scenario } from "@/types";
+import type { FlightRecorderEntry } from "@/types";
 import { formatCurrency } from "@/lib/financialCalculations";
+import { isCommitScenarioResult } from "@/lib/toolResults";
 import { AlertTriangle, Check, ShieldCheck, X } from "lucide-react";
 
 interface ConfirmationModalProps {
   entry: FlightRecorderEntry;
   onApprove: () => void;
   onReject: () => void;
-}
-
-function isScenarioResult(
-  value: unknown
-): value is { scenario: Scenario; message?: string } {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "scenario" in value &&
-    typeof (value as { scenario: unknown }).scenario === "object"
-  );
 }
 
 // Unambiguous charset (no 0/O, 1/I) for a code someone has to actually read
@@ -57,7 +47,7 @@ export default function ConfirmationModal({
   onApprove,
   onReject,
 }: ConfirmationModalProps) {
-  const scenario = isScenarioResult(entry.result) ? entry.result.scenario : null;
+  const scenario = isCommitScenarioResult(entry.result) ? entry.result.scenario : null;
   const goalRows = scenario
     ? scenario.goalStatuses.map((g) => ({ label: g.name, preserved: g.preserved }))
     : [];

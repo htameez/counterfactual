@@ -3,12 +3,13 @@
 import { useState } from "react";
 import type { Scenario } from "@/types";
 import { formatCurrency } from "@/lib/financialCalculations";
-import { Check, AlertTriangle, GitBranch, Plus, Sparkles } from "lucide-react";
+import { Check, AlertTriangle, GitBranch, Lock, Plus, Sparkles } from "lucide-react";
 import ScenarioChart from "./ScenarioChart";
 
 interface ScenarioComparisonProps {
   scenarios: Scenario[];
   recommendedId: string | null;
+  committedId: string | null;
   currentCash: number;
   onSimulate: (scenarioId: string) => void;
   onCommit: (scenarioId: string) => void;
@@ -150,6 +151,7 @@ function AddFutureCard({
 export default function ScenarioComparison({
   scenarios,
   recommendedId,
+  committedId,
   currentCash,
   onSimulate,
   onCommit,
@@ -220,15 +222,18 @@ export default function ScenarioComparison({
       <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
         {scenarios.map((scenario) => {
           const isRecommended = recommendedId === scenario.id;
+          const isCommitted = committedId === scenario.id;
           const risk = RISK_STYLES[scenario.riskLevel];
 
           return (
             <div
               key={scenario.id}
               className={`flex flex-col rounded-xl border bg-ink-900 p-4 transition-all ${
-                isRecommended
-                  ? "border-indigo-400/60 shadow-[0_0_0_1px_rgba(124,102,255,0.35),0_10px_28px_-12px_rgba(124,102,255,0.55)]"
-                  : "border-ink-700 hover:border-ink-600"
+                isCommitted
+                  ? "border-emerald-400/60 shadow-[0_0_0_1px_rgba(31,194,127,0.35),0_10px_28px_-12px_rgba(31,194,127,0.55)]"
+                  : isRecommended
+                    ? "border-indigo-400/60 shadow-[0_0_0_1px_rgba(124,102,255,0.35),0_10px_28px_-12px_rgba(124,102,255,0.55)]"
+                    : "border-ink-700 hover:border-ink-600"
               }`}
             >
               {/* Header */}
@@ -242,12 +247,24 @@ export default function ScenarioComparison({
                 <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${risk.badge}`}>
                   {scenario.riskLevel} Risk
                 </span>
-                {isRecommended && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/15 border border-indigo-400/40 px-2.5 py-0.5 text-xs font-medium text-indigo-200">
-                    <Sparkles className="h-3 w-3" /> Agent&apos;s Pick
+                {isCommitted ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 px-2.5 py-0.5 text-xs font-medium text-emerald-200">
+                    <Lock className="h-3 w-3" /> Committed
                   </span>
+                ) : (
+                  isRecommended && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/15 border border-indigo-400/40 px-2.5 py-0.5 text-xs font-medium text-indigo-200">
+                      <Sparkles className="h-3 w-3" /> Agent&apos;s Pick
+                    </span>
+                  )
                 )}
               </div>
+              {isCommitted && (
+                <p className="mb-3 -mt-1 text-xs text-emerald-300/80">
+                  This is the future you chose — its numbers are locked in
+                  from the moment you approved it.
+                </p>
+              )}
 
               {/* Timeline */}
               <TimelineStrip scenario={scenario} />
@@ -305,12 +322,21 @@ export default function ScenarioComparison({
                 >
                   Explore
                 </button>
-                <button
-                  onClick={() => onCommit(scenario.id)}
-                  className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20"
-                >
-                  Commit
-                </button>
+                {isCommitted ? (
+                  <button
+                    disabled
+                    className="flex cursor-not-allowed items-center justify-center gap-1.5 rounded border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-300"
+                  >
+                    <Lock className="h-3.5 w-3.5" /> Committed
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => onCommit(scenario.id)}
+                    className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20"
+                  >
+                    Commit
+                  </button>
+                )}
               </div>
             </div>
           );

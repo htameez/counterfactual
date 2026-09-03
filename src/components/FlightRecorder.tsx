@@ -114,18 +114,31 @@ export default function FlightRecorder({
                   </div>
                 )}
 
-                {/* Result (if executed successfully) */}
-                {Boolean(entry.result) && entry.status === "Executed" && (() => {
-                  const resultStr = JSON.stringify(entry.result, null, 2);
-                  const truncated =
-                    resultStr.length > 300 ? resultStr.substring(0, 300) + "..." : resultStr;
-                  return (
-                    <div className="mb-2 rounded bg-emerald-500/10 px-2 py-1.5 font-mono text-xs text-emerald-300 max-h-24 overflow-auto">
-                      <p className="font-semibold text-emerald-200 mb-1">result:</p>
-                      <pre className="text-xs overflow-auto">{truncated}</pre>
-                    </div>
-                  );
-                })()}
+                {/* Result (executed or rejected — either way, what happened is part of the audit trail) */}
+                {Boolean(entry.result) &&
+                  (entry.status === "Executed" || entry.status === "Rejected") &&
+                  (() => {
+                    const resultStr = JSON.stringify(entry.result, null, 2);
+                    const truncated =
+                      resultStr.length > 300 ? resultStr.substring(0, 300) + "..." : resultStr;
+                    const isRejected = entry.status === "Rejected";
+                    return (
+                      <div
+                        className={`mb-2 max-h-24 overflow-auto rounded px-2 py-1.5 font-mono text-xs ${
+                          isRejected
+                            ? "bg-red-500/10 text-red-300"
+                            : "bg-emerald-500/10 text-emerald-300"
+                        }`}
+                      >
+                        <p
+                          className={`mb-1 font-semibold ${isRejected ? "text-red-200" : "text-emerald-200"}`}
+                        >
+                          {isRejected ? "result (rejected):" : "result:"}
+                        </p>
+                        <pre className="text-xs overflow-auto">{truncated}</pre>
+                      </div>
+                    );
+                  })()}
 
                 {/* Error (if failed) */}
                 {entry.error && (

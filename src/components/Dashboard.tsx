@@ -25,6 +25,7 @@ import {
   getToolInputSchema,
   getToolPolicy,
 } from "@/lib/riskPolicy";
+import { isCommitScenarioResult } from "@/lib/toolResults";
 import FinancialStatePanel from "./FinancialStatePanel";
 import DecisionPanel from "./DecisionPanel";
 import ScenarioComparison from "./ScenarioComparison";
@@ -53,6 +54,7 @@ export default function Dashboard() {
   const [pendingApproval, setPendingApproval] = useState<FlightRecorderEntry | null>(null);
   const [isAgentRunning, setIsAgentRunning] = useState(false);
   const [recommendedScenario, setRecommendedScenario] = useState<string | null>(null);
+  const [committedScenarioId, setCommittedScenarioId] = useState<string | null>(null);
   const [discoveredTools, setDiscoveredTools] = useState<WebMCPTool[]>([]);
 
   // Tool handlers are registered once and must always see the *current*
@@ -79,17 +81,32 @@ export default function Dashboard() {
     scenariosRef.current = scenarios;
   }, [scenarios]);
 
+  const committedScenarioIdRef = useRef(committedScenarioId);
+  useEffect(() => {
+    committedScenarioIdRef.current = committedScenarioId;
+  }, [committedScenarioId]);
+
   const toolHandlersRef = useRef<Record<string, ToolHandler>>({});
 
   // Recompute every existing scenario's numbers in place (financial state
-  // or protected goals changed, but the futures themselves didn't).
+  // or protected goals changed, but the futures themselves didn't). The
+  // committed scenario, if any, is left untouched — it represents a future
+  // that already happened, so it shouldn't be silently recomputed against
+  // its own aftermath (e.g. "can I still buy the Tesla I just bought?").
+  // `committedId` overrides the ref for the same-tick case right after a
+  // commit, before the ref's sync effect has had a render to catch up.
   const refreshAllScenarios = useCallback(
-    (state: FinancialState, goals: ProtectedGoal[]) => {
+    (
+      state: FinancialState,
+      goals: ProtectedGoal[],
+      committedId: string | null = committedScenarioIdRef.current
+    ) => {
       setScenarios((prev) =>
-        prev.map((s) => ({
-          ...s,
-          ...calculateScenario(state, goals, s.purchasePrice, s.waitMonths),
-        }))
+        prev.map((s) =>
+          s.id === committedId
+            ? s
+            : { ...s, ...calculateScenario(state, goals, s.purchasePrice, s.waitMonths) }
+        )
       );
     },
     []
@@ -116,6 +133,7 @@ export default function Dashboard() {
       }));
       setScenarios(rebuilt);
       setRecommendedScenario(null);
+      setCommittedScenarioId(null);
     },
     []
   );
@@ -532,6 +550,7 @@ export default function Dashboard() {
     setScenarios([]);
     setFlightLog([]);
     setRecommendedScenario(null);
+    setCommittedScenarioId(null);
     setPendingApproval(null);
   }, []);
 
@@ -681,17 +700,65 @@ export default function Dashboard() {
   }, []);
 
   const handleApprove = useCallback(() => {
-    if (pendingApproval) {
-      updateFlightLogEntry(pendingApproval.id, { status: "Executed" });
-      setPendingApproval(null);
+    if (!pendingApproval) return;
+
+    // Apply the committed future's outcome to the real baseline: cash
+    // actually moves, so the board reflects the decision that was just
+    // made instead of pretending nothing happened. Still entirely
+    // simulated — no real transaction — but *our own* numbers should be
+    // honest about the future the user just chose.
+    const commit = isCommitScenarioResult(pendingApproval.result)
+      ? pendingApproval.result
+      : null;
+
+    if (commit) {
+      const updatedState: FinancialState = {
+        ...financialStateRef.current,
+        cashSavings: commit.scenario.cashAfterPurchase,
+      };
+      setFinancialState(updatedState);
+      // Pass the id explicitly: committedScenarioIdRef hasn't synced yet
+      // this tick, so refreshAllScenarios would otherwise still recompute
+      // (and invalidate) the scenario we're committing to right now.
+      refreshAllScenarios(updatedState, protectedGoalsRef.current, commit.scenario.id);
+      setCommittedScenarioId(commit.scenario.id);
     }
-  }, [pendingApproval, updateFlightLogEntry]);
+
+    // The stored result is a snapshot from the moment commit_scenario was
+    // first called — it still literally says "awaiting_approval" unless we
+    // update it here too, which would contradict the "Executed" badge right
+    // above it in the Flight Recorder.
+    updateFlightLogEntry(pendingApproval.id, {
+      status: "Executed",
+      ...(commit && {
+        result: {
+          ...commit,
+          status: "executed",
+          message: `Committed to ${commit.scenario.name}. Approved by user.`,
+        },
+      }),
+    });
+    setPendingApproval(null);
+  }, [pendingApproval, updateFlightLogEntry, refreshAllScenarios]);
 
   const handleReject = useCallback(() => {
-    if (pendingApproval) {
-      updateFlightLogEntry(pendingApproval.id, { status: "Rejected" });
-      setPendingApproval(null);
-    }
+    if (!pendingApproval) return;
+
+    const commit = isCommitScenarioResult(pendingApproval.result)
+      ? pendingApproval.result
+      : null;
+
+    updateFlightLogEntry(pendingApproval.id, {
+      status: "Rejected",
+      ...(commit && {
+        result: {
+          ...commit,
+          status: "rejected",
+          message: `Rejected committing to ${commit.scenario.name}.`,
+        },
+      }),
+    });
+    setPendingApproval(null);
   }, [pendingApproval, updateFlightLogEntry]);
 
   return (
@@ -742,6 +809,7 @@ export default function Dashboard() {
           <ScenarioComparison
             scenarios={scenarios}
             recommendedId={recommendedScenario}
+            committedId={committedScenarioId}
             currentCash={financialState.cashSavings}
             onSimulate={handleSimulateScenario}
             onCommit={handleCommitScenario}
