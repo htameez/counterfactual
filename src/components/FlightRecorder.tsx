@@ -1,134 +1,143 @@
 "use client";
 
-import type { FlightRecorderEntry } from "@/types";
+import type { FlightRecorderEntry, Scenario, WebMCPTool } from "@/types";
 import { getRiskLevelBadgeClass } from "@/lib/riskPolicy";
 import { Clock, User, Zap } from "lucide-react";
+import ManualToolConsole from "./ManualToolConsole";
 
 interface FlightRecorderProps {
   entries: FlightRecorderEntry[];
+  tools: WebMCPTool[];
+  scenarios: Scenario[];
+  onInvoke: (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  Discovered: "bg-blue-100 text-blue-900",
-  Simulated: "bg-indigo-100 text-indigo-900",
-  "Awaiting Approval": "bg-amber-100 text-amber-900",
-  Approved: "bg-emerald-100 text-emerald-900",
-  Rejected: "bg-red-100 text-red-900",
-  Executed: "bg-emerald-100 text-emerald-900",
-  Failed: "bg-red-100 text-red-900",
+  Discovered: "bg-ink-700 text-ink-200",
+  Simulated: "bg-indigo-500/15 text-indigo-300",
+  "Awaiting Approval": "bg-amber-500/15 text-amber-300",
+  Approved: "bg-emerald-500/15 text-emerald-300",
+  Rejected: "bg-red-500/15 text-red-300",
+  Executed: "bg-emerald-500/15 text-emerald-300",
+  Failed: "bg-red-500/15 text-red-300",
 };
 
 function formatTimestamp(date: Date): string {
   return date.toLocaleTimeString();
 }
 
-export default function FlightRecorder({ entries }: FlightRecorderProps) {
-  if (entries.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center p-6 text-center">
-        <Zap className="mb-2 h-8 w-8 text-neutral-400" />
-        <p className="text-sm font-medium text-neutral-600">
-          WebMCP Flight Recorder
-        </p>
-        <p className="mt-2 text-xs text-neutral-500">
-          Tool invocations will appear here
-        </p>
-      </div>
-    );
-  }
-
+export default function FlightRecorder({
+  entries,
+  tools,
+  scenarios,
+  onInvoke,
+}: FlightRecorderProps) {
   return (
-    <div className="flex flex-col">
+    <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="border-b border-neutral-200 bg-white px-4 py-3">
-        <h3 className="font-semibold text-navy-900">Flight Recorder</h3>
-        <p className="text-xs text-neutral-600">
+      <div className="border-b border-ink-700 bg-ink-900 px-4 py-3">
+        <h3 className="font-semibold text-ink-50">Flight Recorder</h3>
+        <p className="text-xs text-ink-400">
           {entries.length} {entries.length === 1 ? "entry" : "entries"}
         </p>
       </div>
 
+      <ManualToolConsole tools={tools} scenarios={scenarios} onInvoke={onInvoke} />
+
       {/* Entries List */}
-      <div className="flex-1 overflow-auto">
-        <div className="space-y-0 divide-y divide-neutral-200">
-          {entries.map((entry) => (
-            <div
-              key={entry.id}
-              className="border-l-4 border-neutral-200 bg-white px-4 py-3 transition-colors hover:bg-neutral-50"
-              style={{
-                borderLeftColor:
-                  entry.riskClassification === "read-only"
-                    ? "#059669"
-                    : entry.riskClassification === "simulation"
-                      ? "#2727ff"
-                      : entry.riskClassification === "reversible"
-                        ? "#f59e0b"
-                        : "#dc2626",
-              }}
-            >
-              {/* Tool Name & Status */}
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2 flex-1">
-                  <code className="text-xs font-bold text-navy-900 bg-neutral-100 px-2 py-1 rounded">
-                    {entry.toolName}
-                  </code>
+      <div className="scrollbar-thin flex-1 overflow-auto">
+        {entries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center p-6 text-center">
+            <Zap className="mb-2 h-8 w-8 text-ink-600" />
+            <p className="text-sm font-medium text-ink-300">
+              No tool calls yet
+            </p>
+            <p className="mt-2 text-xs text-ink-500">
+              Run the agent, or invoke a tool above — every call lands here.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-ink-800">
+            {entries.map((entry) => (
+              <div
+                key={entry.id}
+                className="border-l-4 bg-ink-900 px-4 py-3 transition-colors hover:bg-ink-850"
+                style={{
+                  borderLeftColor:
+                    entry.riskClassification === "read-only"
+                      ? "#1fc27f"
+                      : entry.riskClassification === "simulation"
+                        ? "#7c66ff"
+                        : entry.riskClassification === "reversible"
+                          ? "#ef9a0c"
+                          : "#f87171",
+                }}
+              >
+                {/* Tool Name & Status */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 flex-1">
+                    <code className="text-xs font-bold text-ink-50 bg-ink-800 px-2 py-1 rounded">
+                      {entry.toolName}
+                    </code>
+                    <span
+                      className={`text-xs font-medium px-2 py-0.5 rounded ${getRiskLevelBadgeClass(entry.riskClassification)}`}
+                    >
+                      {entry.riskClassification}
+                    </span>
+                  </div>
                   <span
-                    className={`text-xs font-medium px-2 py-0.5 rounded ${getRiskLevelBadgeClass(entry.riskClassification)}`}
+                    className={`text-xs font-medium px-2 py-1 rounded ${STATUS_COLORS[entry.status] || "bg-ink-800 text-ink-200"}`}
                   >
-                    {entry.riskClassification}
+                    {entry.status}
                   </span>
                 </div>
-                <span
-                  className={`text-xs font-medium px-2 py-1 rounded ${STATUS_COLORS[entry.status] || "bg-neutral-100 text-neutral-900"}`}
-                >
-                  {entry.status}
-                </span>
-              </div>
 
-              {/* Origin & Timestamp */}
-              <div className="flex items-center gap-4 text-xs text-neutral-600 mb-2">
-                <div className="flex items-center gap-1">
-                  <User className="h-3 w-3" />
-                  {entry.origin === "agent" ? "Agent" : "User"}
-                </div>
-                <div className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {formatTimestamp(entry.timestamp)}
-                </div>
-              </div>
-
-              {/* Arguments */}
-              {Object.keys(entry.toolArgs).length > 0 && (
-                <div className="mb-2 rounded bg-neutral-50 px-2 py-1.5 font-mono text-xs text-neutral-700">
-                  <p className="font-semibold text-neutral-900 mb-1">args:</p>
-                  <pre className="overflow-auto text-xs">
-                    {JSON.stringify(entry.toolArgs, null, 2)}
-                  </pre>
-                </div>
-              )}
-
-              {/* Result (if completed successfully) */}
-              {Boolean(entry.result) && entry.status !== "Failed" && (() => {
-                const resultStr = JSON.stringify(entry.result, null, 2);
-                const truncated =
-                  resultStr.length > 300 ? resultStr.substring(0, 300) + "..." : resultStr;
-                return (
-                  <div className="mb-2 rounded bg-emerald-50 px-2 py-1.5 font-mono text-xs text-emerald-700 max-h-24 overflow-auto">
-                    <p className="font-semibold text-emerald-900 mb-1">result:</p>
-                    <pre className="text-xs overflow-auto">{truncated}</pre>
+                {/* Origin & Timestamp */}
+                <div className="flex items-center gap-4 text-xs text-ink-500 mb-2">
+                  <div className="flex items-center gap-1">
+                    <User className="h-3 w-3" />
+                    {entry.origin === "agent" ? "Agent" : "User"}
                   </div>
-                );
-              })()}
-
-              {/* Error (if failed) */}
-              {entry.error && (
-                <div className="rounded bg-red-50 px-2 py-1.5 font-mono text-xs text-red-700">
-                  <p className="font-semibold text-red-900">error:</p>
-                  <p>{entry.error}</p>
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {formatTimestamp(entry.timestamp)}
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
+
+                {/* Arguments */}
+                {Object.keys(entry.toolArgs).length > 0 && (
+                  <div className="mb-2 rounded bg-ink-850 px-2 py-1.5 font-mono text-xs text-ink-300">
+                    <p className="font-semibold text-ink-100 mb-1">args:</p>
+                    <pre className="overflow-auto text-xs">
+                      {JSON.stringify(entry.toolArgs, null, 2)}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Result (if executed successfully) */}
+                {Boolean(entry.result) && entry.status === "Executed" && (() => {
+                  const resultStr = JSON.stringify(entry.result, null, 2);
+                  const truncated =
+                    resultStr.length > 300 ? resultStr.substring(0, 300) + "..." : resultStr;
+                  return (
+                    <div className="mb-2 rounded bg-emerald-500/10 px-2 py-1.5 font-mono text-xs text-emerald-300 max-h-24 overflow-auto">
+                      <p className="font-semibold text-emerald-200 mb-1">result:</p>
+                      <pre className="text-xs overflow-auto">{truncated}</pre>
+                    </div>
+                  );
+                })()}
+
+                {/* Error (if failed) */}
+                {entry.error && (
+                  <div className="rounded bg-red-500/10 px-2 py-1.5 font-mono text-xs text-red-300">
+                    <p className="font-semibold text-red-200">error:</p>
+                    <p>{entry.error}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

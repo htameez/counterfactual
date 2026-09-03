@@ -12,12 +12,22 @@ export function getWebMCPStatusText(contextType: WebMCPContextType): string {
 
 export function getWebMCPStatusColor(contextType: WebMCPContextType): string {
   const colorMap: Record<WebMCPContextType, string> = {
-    native: "text-emerald-600 bg-emerald-50",
-    legacy: "text-amber-600 bg-amber-50",
-    "demo-bridge": "text-indigo-600 bg-indigo-50",
-    unavailable: "text-neutral-600 bg-neutral-100",
+    native: "text-emerald-300 bg-emerald-500/10",
+    legacy: "text-amber-300 bg-amber-500/10",
+    "demo-bridge": "text-indigo-300 bg-indigo-500/10",
+    unavailable: "text-ink-300 bg-ink-500/10",
   };
-  return colorMap[contextType] || "text-neutral-600 bg-neutral-100";
+  return colorMap[contextType] || "text-ink-300 bg-ink-500/10";
+}
+
+export function getWebMCPStatusDotClass(contextType: WebMCPContextType): string {
+  const dotMap: Record<WebMCPContextType, string> = {
+    native: "bg-emerald-400",
+    legacy: "bg-amber-400",
+    "demo-bridge": "bg-indigo-400",
+    unavailable: "bg-ink-400",
+  };
+  return dotMap[contextType] || "bg-ink-400";
 }
 
 export function getWebMCPStatusDescription(contextType: WebMCPContextType): string {

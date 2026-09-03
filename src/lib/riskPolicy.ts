@@ -204,22 +204,34 @@ export function getToolAnnotations(toolName: string): ToolAnnotations {
 
 export function getRiskLevelColor(riskLevel: RiskLevel): string {
   const colors: Record<RiskLevel, string> = {
-    "read-only": "text-emerald-700 bg-emerald-50 border-emerald-200",
-    simulation: "text-indigo-700 bg-indigo-50 border-indigo-200",
-    reversible: "text-amber-700 bg-amber-50 border-amber-200",
-    "external-commitment": "text-red-700 bg-red-50 border-red-200",
-    destructive: "text-red-900 bg-red-100 border-red-400",
+    "read-only": "text-emerald-300 bg-emerald-500/10 border-emerald-500/30",
+    simulation: "text-indigo-300 bg-indigo-500/10 border-indigo-500/30",
+    reversible: "text-amber-300 bg-amber-500/10 border-amber-500/30",
+    "external-commitment": "text-red-300 bg-red-500/10 border-red-500/30",
+    destructive: "text-red-200 bg-red-500/20 border-red-500/50",
   };
-  return colors[riskLevel] || "text-neutral-700 bg-neutral-50 border-neutral-200";
+  return colors[riskLevel] || "text-ink-300 bg-ink-500/10 border-ink-500/30";
 }
 
 export function getRiskLevelBadgeClass(riskLevel: RiskLevel): string {
   const classes: Record<RiskLevel, string> = {
-    "read-only": "bg-emerald-100 text-emerald-900",
-    simulation: "bg-indigo-100 text-indigo-900",
-    reversible: "bg-amber-100 text-amber-900",
-    "external-commitment": "bg-red-100 text-red-900",
-    destructive: "bg-red-200 text-red-900",
+    "read-only": "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30",
+    simulation: "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30",
+    reversible: "bg-amber-500/15 text-amber-300 border border-amber-500/30",
+    "external-commitment": "bg-red-500/15 text-red-300 border border-red-500/30",
+    destructive: "bg-red-500/25 text-red-200 border border-red-500/50",
   };
-  return classes[riskLevel] || "bg-neutral-100 text-neutral-900";
+  return classes[riskLevel] || "bg-ink-500/15 text-ink-300 border border-ink-500/30";
+}
+
+/** A solid dot color for compact risk indicators (timelines, legends). */
+export function getRiskLevelDotClass(riskLevel: RiskLevel): string {
+  const classes: Record<RiskLevel, string> = {
+    "read-only": "bg-emerald-400",
+    simulation: "bg-indigo-400",
+    reversible: "bg-amber-400",
+    "external-commitment": "bg-red-400",
+    destructive: "bg-red-500",
+  };
+  return classes[riskLevel] || "bg-ink-400";
 }

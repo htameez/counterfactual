@@ -6,6 +6,7 @@ import type {
   FlightRecorderEntry,
   Scenario,
   ToolStatus,
+  WebMCPTool,
 } from "@/types";
 import {
   DEFAULT_FINANCIAL_STATE,
@@ -37,6 +38,7 @@ export default function Dashboard() {
   const [pendingApproval, setPendingApproval] = useState<FlightRecorderEntry | null>(null);
   const [isAgentRunning, setIsAgentRunning] = useState(false);
   const [recommendedScenario, setRecommendedScenario] = useState<string | null>(null);
+  const [discoveredTools, setDiscoveredTools] = useState<WebMCPTool[]>([]);
 
   // Tool handlers are registered once and must always see the *current*
   // state, not the values captured at registration time — refs give the
@@ -407,6 +409,19 @@ export default function Dashboard() {
     [webmcpClient, executeToolWithRecorder]
   );
 
+  // Lets a human invoke any discovered tool directly — the same handler,
+  // risk policy, and Flight Recorder trail the scripted agent uses.
+  const handleManualInvoke = useCallback(
+    async (toolName: string, args: Record<string, unknown>) => {
+      const handler = toolHandlersRef.current[toolName];
+      if (!handler) {
+        throw new Error(`Unknown tool: ${toolName}`);
+      }
+      return executeToolWithRecorder(toolName, args, "user", handler);
+    },
+    [executeToolWithRecorder]
+  );
+
   // Initialize on client mount. The ref guard keeps this idempotent under
   // React Strict Mode's mount -> cleanup -> mount dev cycle, so tools are
   // only ever registered once per real mount.
@@ -420,12 +435,16 @@ export default function Dashboard() {
     let cancelled = false;
     let clientForCleanup: WebMCPClient | null = null;
 
-    initializeWebMCP().then((client) => {
+    initializeWebMCP().then(async (client) => {
       if (cancelled) {
         void client.unregisterAll();
         return;
       }
       clientForCleanup = client;
+      const tools = await client.discoverTools();
+      if (!cancelled) {
+        setDiscoveredTools(tools);
+      }
     });
 
     return () => {
@@ -451,14 +470,23 @@ export default function Dashboard() {
   }, [pendingApproval, updateFlightLogEntry]);
 
   return (
-    <div className="flex h-screen flex-col bg-neutral-50">
+    <div className="flex h-screen flex-col bg-ink-950 text-ink-100">
       {/* Header */}
-      <div className="border-b border-neutral-200 bg-white px-6 py-4">
+      <div className="border-b border-ink-700 bg-ink-900 px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-navy-900">Counterfactual</h1>
-            <p className="text-sm text-neutral-600">
-              Explore the consequences of major decisions before acting
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-2xl font-bold tracking-tight text-ink-50">
+                Counterfactual
+              </h1>
+              <span className="rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-0.5 text-[11px] font-medium text-indigo-300">
+                Life Roadmap
+              </span>
+            </div>
+            <p className="mt-0.5 text-sm text-ink-400">
+              Fork your next big decision into parallel futures, compare them
+              side by side, and decide together with an agent — before
+              anything is committed.
             </p>
           </div>
           <WebMCPStatus contextType={webmcpClient?.getContextType() || "unavailable"} />
@@ -468,7 +496,7 @@ export default function Dashboard() {
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Panel - Financial State & Scenarios */}
-        <div className="flex flex-1 flex-col overflow-auto border-r border-neutral-200">
+        <div className="flex flex-1 flex-col overflow-auto border-r border-ink-700 bg-board bg-fixed bg-[length:22px_22px]">
           <FinancialStatePanel
             state={financialState}
             onUpdate={(field, value) => {
@@ -481,6 +509,7 @@ export default function Dashboard() {
           <ScenarioComparison
             scenarios={scenarios}
             recommendedId={recommendedScenario}
+            currentCash={financialState.cashSavings}
             onSimulate={handleSimulateScenario}
             onCommit={handleCommitScenario}
           />
@@ -493,8 +522,13 @@ export default function Dashboard() {
         </div>
 
         {/* Right Panel - Flight Recorder */}
-        <div className="w-96 border-l border-neutral-200 bg-white">
-          <FlightRecorder entries={flightLog} />
+        <div className="flex w-96 flex-col overflow-hidden border-l border-ink-700 bg-ink-900">
+          <FlightRecorder
+            entries={flightLog}
+            tools={discoveredTools}
+            scenarios={scenarios}
+            onInvoke={handleManualInvoke}
+          />
         </div>
       </div>
 

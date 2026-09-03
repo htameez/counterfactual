@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { FinancialState } from "@/types";
 import { formatCurrency } from "@/lib/financialCalculations";
+import { MapPin } from "lucide-react";
 
 interface FinancialStatePanelProps {
   state: FinancialState;
@@ -65,58 +66,59 @@ export default function FinancialStatePanel({
     state.austinMovingCost;
 
   return (
-    <div className="border-b border-neutral-200 bg-white p-6">
-      <h2 className="mb-4 text-lg font-semibold text-navy-900">
-        Current Financial State
-      </h2>
+    <div className="border-b border-ink-700 bg-ink-900/60 p-6">
+      <div className="mb-4 flex items-center gap-2">
+        <MapPin className="h-4 w-4 text-indigo-400" />
+        <h2 className="text-lg font-semibold text-ink-50">
+          Where You Stand Today
+        </h2>
+      </div>
 
       {/* Quick Summary */}
-      <div className="mb-6 grid grid-cols-2 gap-4 rounded-lg bg-neutral-50 p-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 rounded-lg border border-ink-700 bg-ink-850 p-4 sm:grid-cols-4">
         <div>
-          <p className="text-sm text-neutral-600">Current Cash</p>
-          <p className="text-xl font-bold text-navy-900">
+          <p className="text-xs text-ink-400">Current cash</p>
+          <p className="text-xl font-bold text-ink-50">
             {formatCurrency(state.cashSavings)}
           </p>
         </div>
         <div>
-          <p className="text-sm text-neutral-600">Monthly Savings</p>
-          <p className="text-xl font-bold text-emerald-600">
+          <p className="text-xs text-ink-400">Monthly savings</p>
+          <p className="text-xl font-bold text-emerald-400">
             {formatCurrency(monthlySavings)}
           </p>
         </div>
         <div>
-          <p className="text-sm text-neutral-600">Protected Goals</p>
-          <p className="text-xl font-bold text-indigo-600">
+          <p className="text-xs text-ink-400">Protected goals</p>
+          <p className="text-xl font-bold text-indigo-300">
             {formatCurrency(totalReserves)}
           </p>
         </div>
         <div>
-          <p className="text-sm text-neutral-600">Tesla Price</p>
-          <p className="text-xl font-bold text-navy-900">
+          <p className="text-xs text-ink-400">Tesla price</p>
+          <p className="text-xl font-bold text-ink-50">
             {formatCurrency(state.teslaPurchasePrice)}
           </p>
         </div>
       </div>
 
       {/* Question Prompt */}
-      <div className="mb-6 rounded-lg border-2 border-indigo-300 bg-indigo-50 p-4">
-        <p className="text-base font-semibold text-indigo-900">
-          Can I buy this Tesla in cash without jeopardizing graduate school, my
-          emergency fund, or a possible move to Austin?
+      <div className="mb-6 rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-4">
+        <p className="text-base font-semibold text-indigo-100">
+          &ldquo;Can I buy this Tesla in cash without jeopardizing graduate
+          school, my emergency fund, or a possible move to Austin?&rdquo;
         </p>
       </div>
 
       {/* Editable Fields */}
       <div className="space-y-3">
         {(Object.keys(state) as Array<keyof FinancialState>).map((field) => (
-          <div key={field} className="flex items-center justify-between">
+          <div key={field} className="flex items-center justify-between gap-3">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-navy-900">
+              <label className="block text-sm font-medium text-ink-200">
                 {FIELD_LABELS[field]}
               </label>
-              <p className="text-xs text-neutral-600">
-                {FIELD_DESCRIPTIONS[field]}
-              </p>
+              <p className="text-xs text-ink-500">{FIELD_DESCRIPTIONS[field]}</p>
             </div>
             {editingField === field ? (
               <div className="flex gap-2">
@@ -124,20 +126,20 @@ export default function FinancialStatePanel({
                   type="number"
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
-                  className="w-32 rounded border border-neutral-300 px-2 py-1 text-right text-sm focus:border-indigo-500 focus:outline-none"
+                  className="w-32 rounded border border-ink-600 bg-ink-800 px-2 py-1 text-right text-sm text-ink-50 focus:border-indigo-400 focus:outline-none"
                   autoFocus
                   min="0"
                   step="100"
                 />
                 <button
                   onClick={() => handleSave(field)}
-                  className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700"
+                  className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500"
                 >
                   Save
                 </button>
                 <button
                   onClick={handleCancel}
-                  className="rounded bg-neutral-300 px-3 py-1 text-xs font-medium text-neutral-900 hover:bg-neutral-400"
+                  className="rounded bg-ink-700 px-3 py-1 text-xs font-medium text-ink-200 hover:bg-ink-600"
                 >
                   Cancel
                 </button>
@@ -145,7 +147,7 @@ export default function FinancialStatePanel({
             ) : (
               <button
                 onClick={() => handleEdit(field)}
-                className="rounded bg-neutral-100 px-4 py-2 text-right text-sm font-semibold text-navy-900 hover:bg-neutral-200"
+                className="shrink-0 rounded bg-ink-800 px-4 py-2 text-right text-sm font-semibold text-ink-100 hover:bg-ink-700"
               >
                 {formatCurrency(state[field])}
               </button>

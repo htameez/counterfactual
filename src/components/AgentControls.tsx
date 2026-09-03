@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, RotateCcw } from "lucide-react";
+import { Play, RotateCcw, Sparkles } from "lucide-react";
 
 interface AgentControlsProps {
   isRunning: boolean;
@@ -14,14 +14,17 @@ export default function AgentControls({
   onReset,
 }: AgentControlsProps) {
   return (
-    <div className="border-b border-neutral-200 bg-white p-6">
-      <h2 className="mb-4 text-lg font-semibold text-navy-900">Agent</h2>
+    <div className="border-b border-ink-700 bg-ink-900/60 p-6">
+      <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-ink-50">
+        <Sparkles className="h-4 w-4 text-indigo-400" />
+        Agent Co-Pilot
+      </h2>
 
       <div className="space-y-3">
         <button
           onClick={onRunAgent}
           disabled={isRunning}
-          className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 font-medium text-white hover:bg-indigo-700 disabled:bg-neutral-400"
+          className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 font-medium text-white shadow-sm shadow-indigo-950/40 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-ink-400"
         >
           <Play className="h-4 w-4" />
           {isRunning ? "Running Analysis..." : "Run Agent Analysis"}
@@ -30,17 +33,18 @@ export default function AgentControls({
         <button
           onClick={onReset}
           disabled={isRunning}
-          className="w-full flex items-center justify-center gap-2 rounded-lg border border-neutral-300 bg-white px-4 py-3 font-medium text-neutral-900 hover:bg-neutral-50 disabled:text-neutral-400"
+          className="w-full flex items-center justify-center gap-2 rounded-lg border border-ink-600 bg-ink-850 px-4 py-3 font-medium text-ink-200 transition-colors hover:bg-ink-800 disabled:text-ink-500"
         >
           <RotateCcw className="h-4 w-4" />
           Reset Demo
         </button>
 
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-          <p className="text-xs text-blue-900">
-            <span className="font-semibold">Demo Mode:</span> The agent will
-            automatically discover tools, explore scenarios, and recommend the
-            best financial outcome.
+        <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-3">
+          <p className="text-xs text-indigo-200">
+            <span className="font-semibold text-indigo-100">Demo mode:</span>{" "}
+            the agent discovers your tools, forks all three futures, compares
+            them against your protected goals, and recommends one — you still
+            decide whether to explore or commit.
           </p>
         </div>
       </div>

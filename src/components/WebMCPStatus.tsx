@@ -5,8 +5,8 @@ import {
   getWebMCPStatusText,
   getWebMCPStatusColor,
   getWebMCPStatusDescription,
+  getWebMCPStatusDotClass,
 } from "@/lib/webmcpStatus";
-import { Zap } from "lucide-react";
 
 interface WebMCPStatusProps {
   contextType: WebMCPContextType;
@@ -16,15 +16,14 @@ export default function WebMCPStatus({ contextType }: WebMCPStatusProps) {
   const statusText = getWebMCPStatusText(contextType);
   const statusColor = getWebMCPStatusColor(contextType);
   const statusDescription = getWebMCPStatusDescription(contextType);
+  const dotClass = getWebMCPStatusDotClass(contextType);
 
   return (
-    <div className="flex items-center gap-2 rounded-lg bg-neutral-100 px-4 py-2">
-      <Zap className="h-4 w-4 text-indigo-600" />
+    <div className={`flex items-center gap-2.5 rounded-lg border border-ink-700 px-4 py-2 ${statusColor}`}>
+      <span className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`} />
       <div>
-        <p className={`text-xs font-semibold ${statusColor.split(" ")[0]}`}>
-          {statusText}
-        </p>
-        <p className="text-xs text-neutral-600">{statusDescription}</p>
+        <p className="text-xs font-semibold text-ink-50">{statusText}</p>
+        <p className="text-xs text-ink-400">{statusDescription}</p>
       </div>
     </div>
   );
