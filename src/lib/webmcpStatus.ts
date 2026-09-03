@@ -3,6 +3,7 @@ import type { WebMCPContextType } from "@/types";
 export function getWebMCPStatusText(contextType: WebMCPContextType): string {
   const statusMap: Record<WebMCPContextType, string> = {
     native: "Native WebMCP",
+    polyfilled: "WebMCP (Polyfilled)",
     legacy: "Legacy WebMCP",
     "demo-bridge": "Demo Bridge",
     unavailable: "WebMCP Unavailable",
@@ -13,6 +14,7 @@ export function getWebMCPStatusText(contextType: WebMCPContextType): string {
 export function getWebMCPStatusColor(contextType: WebMCPContextType): string {
   const colorMap: Record<WebMCPContextType, string> = {
     native: "text-emerald-300 bg-emerald-500/10",
+    polyfilled: "text-emerald-300 bg-emerald-500/10",
     legacy: "text-amber-300 bg-amber-500/10",
     "demo-bridge": "text-indigo-300 bg-indigo-500/10",
     unavailable: "text-ink-300 bg-ink-500/10",
@@ -23,6 +25,7 @@ export function getWebMCPStatusColor(contextType: WebMCPContextType): string {
 export function getWebMCPStatusDotClass(contextType: WebMCPContextType): string {
   const dotMap: Record<WebMCPContextType, string> = {
     native: "bg-emerald-400",
+    polyfilled: "bg-emerald-400",
     legacy: "bg-amber-400",
     "demo-bridge": "bg-indigo-400",
     unavailable: "bg-ink-400",
@@ -32,10 +35,12 @@ export function getWebMCPStatusDotClass(contextType: WebMCPContextType): string 
 
 export function getWebMCPStatusDescription(contextType: WebMCPContextType): string {
   const descMap: Record<WebMCPContextType, string> = {
-    native: "Using native WebMCP from the browser environment.",
+    native: "Browser ships document.modelContext natively.",
+    polyfilled:
+      "document.modelContext installed via @mcp-b/webmcp-polyfill — genuinely visible to outside tools, e.g. a browser extension.",
     legacy: "Using legacy WebMCP via navigator.modelContext.",
     "demo-bridge":
-      "Native WebMCP not found. Using local Demo Bridge for tool demonstration.",
+      "Polyfill unavailable. Using an in-page Demo Bridge — tools work here, but aren't visible outside this tab.",
     unavailable:
       "WebMCP is not available. Some features may not work correctly.",
   };

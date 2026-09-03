@@ -5,6 +5,11 @@ import type {
   WebMCPTool,
   WebMCPContext,
 } from "@/types";
+// Side-effecting import: installs the real @mcp-b/webmcp-polyfill runtime
+// (a no-op if native WebMCP or another polyfill already put it there) so
+// this page's document.modelContext is genuinely visible to tools outside
+// this React tree, not just to our own in-page Demo Bridge.
+import { wasWebMCPPolyfillInstalledByUs } from "./webmcpPolyfill";
 
 export interface ToolDefinition {
   name: string;
@@ -21,9 +26,10 @@ export interface ToolDefinition {
 export function detectWebMCPContext(): WebMCPContextType {
   if (typeof document === "undefined") return "unavailable";
 
-  // Check for native WebMCP
   if (document.modelContext) {
-    return "native";
+    // If we're the one who installed @mcp-b/webmcp-polyfill, say so rather
+    // than claiming the browser ships this natively.
+    return wasWebMCPPolyfillInstalledByUs() ? "polyfilled" : "native";
   }
 
   // Check for legacy navigator.modelContext

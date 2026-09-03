@@ -119,6 +119,7 @@ export interface FlightRecorderEntry {
 
 export type WebMCPContextType =
   | "native"
+  | "polyfilled"
   | "legacy"
   | "demo-bridge"
   | "unavailable";

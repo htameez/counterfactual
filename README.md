@@ -150,55 +150,66 @@ Represents a consequential external commitment. **Never executes immediately.**
 
 **Note:** This is a hackathon MVP. No real financial transaction is processed.
 
-## WebMCP Context: Native vs. Demo Bridge
+## WebMCP Context: Native vs. Polyfilled vs. Demo Bridge
 
-Counterfactual supports three WebMCP contexts:
+Counterfactual supports five WebMCP contexts, checked in this order:
 
 ### Native WebMCP
-- **Status:** `document.modelContext` available
-- **Behavior:** Uses browser-provided WebMCP
+- **Status:** `document.modelContext` present without us doing anything
+- **Behavior:** The browser itself ships WebMCP
 - **Indicator:** "Native WebMCP" in header
+- **Reality check:** as of today, no shipping browser does this unflagged — this path exists for when one does.
+
+### Polyfilled WebMCP
+- **Status:** `document.modelContext` present because *we* installed it
+- **Behavior:** [`@mcp-b/webmcp-polyfill`](https://www.npmjs.com/package/@mcp-b/webmcp-polyfill) — the real, spec-tracking polyfill from the WebMCP-org project — is loaded on mount ([`src/lib/webmcpPolyfill.ts`](src/lib/webmcpPolyfill.ts)) and genuinely writes `document.modelContext` onto the page.
+- **Indicator:** "WebMCP (Polyfilled)" in header
+- **Why this matters:** this is the difference between a demo that only talks to itself and one that's actually discoverable. With the polyfill active, any real outside consumer — a browser extension, another AI agent inspecting the live tab, `chrome-devtools-mcp` — can find and call these tools by reading `document.modelContext` directly, the same way a native implementation would let them. Our own Demo Bridge (below) can't do that; it never touches `window`/`document` at all.
+- **No-op guarantee:** the polyfill checks for an existing `document.modelContext` before installing and does nothing if one is already there (native or otherwise), so it's always safe to load.
 
 ### Legacy WebMCP
 - **Status:** `navigator.modelContext` available (fallback)
-- **Behavior:** Uses legacy WebMCP API
+- **Behavior:** Uses the deprecated pre-Document-first WebMCP surface
 - **Indicator:** "Legacy WebMCP" in header
 
 ### Demo Bridge
-- **Status:** No native WebMCP found
-- **Behavior:** Local, in-memory tool registry
+- **Status:** No native or polyfilled context found (e.g. insecure context)
+- **Behavior:** Local, in-memory tool registry, scoped to this page's React state
 - **Indicator:** "Demo Bridge" in header
-- **Note:** Fully functional for demonstration—no functionality is lost
+- **Note:** Fully functional for the in-app demo — Flight Recorder, Manual Tool Console, and the scripted agent all work identically — but invisible to anything outside this tab.
 
 ### Unavailable
-- **Status:** No WebMCP support
-- **Behavior:** Limited functionality
+- **Status:** No WebMCP support of any kind (e.g. non-browser environment)
 - **Indicator:** "WebMCP Unavailable" in header
 
-The application always displays its actual context. It **never falsely claims native WebMCP** if using the Demo Bridge.
+The application always displays its actual context and **never falsely claims native WebMCP** for the polyfilled or Demo Bridge paths.
 
 ## Target API
 
 ```typescript
-// Detect available context
-const context = document.modelContext ?? navigator.modelContext
+// Detect available context (Document is canonical; Navigator is the deprecated alias)
+const context = document.modelContext ?? navigator.modelContext;
 
 // Register a tool
 await context.registerTool(
-  name: string,
-  description: string,
-  inputSchema: JSONSchema,
-  handler: (args: unknown) => unknown
-)
-
-// Invoke a tool
-const result = await context.invokeTool(name: string, args: unknown)
+  {
+    name: string,
+    title?: string,
+    description: string,
+    inputSchema?: JSONSchema,
+    annotations?: { readOnlyHint?: boolean; untrustedContentHint?: boolean },
+    execute: (input: unknown) => unknown | Promise<unknown>,
+  },
+  { signal?: AbortSignal, exposedTo?: string[] }
+);
 
 // Discover available tools
-const tools = await context.discoverTools(): WebMCPTool[]
+const tools = await context.getTools({ fromOrigins?: string[] });
 ```
 
-For compatibility, Counterfactual includes a **compatibility helper** that checks both `document.modelContext` and `navigator.modelContext`, and falls back to the **Demo Bridge** if neither is available.
+Tool registration is cleaned up by aborting the `AbortSignal` passed at registration time — there's no separate `unregisterTool` call in the real API, and our own cleanup path (`WebMCPClient.unregisterAll()`) does exactly that.
+
+For compatibility, Counterfactual includes a **compatibility helper** ([`src/lib/webmcp.ts`](src/lib/webmcp.ts)) that checks `document.modelContext ?? navigator.modelContext`, loads the real `@mcp-b/webmcp-polyfill` if neither is present, and falls back to the in-page **Demo Bridge** only if the polyfill itself can't install (e.g. an insecure context).
 
 ## Demo Scenario
 
@@ -284,7 +295,9 @@ npm run build
 ✓ **Real-time Flight Recorder** – Tool invocations recorded with risk and status  
 ✓ **Approval gates** – Consequential actions require explicit human confirmation  
 ✓ **Scripted agent demo** – Automated analysis that feels like an agent operating the live interface  
-✓ **WebMCP status indicator** – Displays whether using native, legacy, or Demo Bridge  
+✓ **WebMCP status indicator** – Displays whether using native, polyfilled, legacy, or Demo Bridge  
+✓ **Genuinely external-visible tools** – `@mcp-b/webmcp-polyfill` puts a real `document.modelContext` on the page, so outside tools (browser extensions, other agents) can discover and call it, not just our own in-page demo  
+✓ **Human-verification gate on commitment** – `commit_scenario`'s approval modal requires typing a freshly generated code before Approve unlocks, so a UI-driving agent can't click straight through it the way it could a plain button  
 ✓ **Editable assumptions** – User or agent can update financial parameters; scenarios recalculate instantly  
 ✓ **TypeScript type safety** – Narrowly scoped custom type declarations for experimental WebMCP  
 ✓ **Responsive design** – Polished on desktop; mobile support included  
@@ -297,6 +310,8 @@ npm run build
 - **Simulated commitments:** No real financial transactions
 - **No persistence:** Reloading the page resets state (by design)
 - **No machine learning:** The agent follows a scripted path, not a learned policy
+- **The approval gate raises the bar, it doesn't guarantee a human:** the confirmation code + dwell timer on `commit_scenario` stop a naive UI-clicking agent, but a capable enough multimodal agent could still read the code and type it back. True human-proof would need something like WebAuthn — out of scope here; the code is upfront about this tradeoff.
+- **Discoverability depends on the polyfill actually installing:** `@mcp-b/webmcp-polyfill` requires a secure context (HTTPS, or `localhost`). If it can't install for some reason, the app silently falls back to the Demo Bridge — still fully demoable in-page, just not externally visible.
 
 ## Future Vision
 
