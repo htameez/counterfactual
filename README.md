@@ -319,31 +319,6 @@ Both scripts assume regular Chrome (`--chrome-channel chrome`) since Canary isn'
 
 **This is not theoretical** — writing these evals caught a real bug: `fork_scenario`'s return value came back `undefined` when invoked through the actual registered `document.modelContext` path, even though the in-app UI (which calls the same handlers through a different, non-WebMCP-wrapped code path) never showed a symptom. An external agent calling `fork_scenario` for real would have silently gotten nothing back. Fixed in [`Dashboard.tsx`](src/components/Dashboard.tsx) by computing the scenario before setting state instead of capturing it from inside a `setState` updater callback — smoke mode passes 13/13 steps now, verified against a live page, not just against types.
 
-## 60–90 Second Demo Script
-
-1. **Show the start state:** "Counterfactual starts with default assumptions: $72k saved, $6k monthly income, $3.2k expenses."
-
-2. **Run agent analysis:** Click "Run Agent Analysis." Watch the Flight Recorder populate in real time:
-   - Discovers tools
-   - Gets financial state (including the active decision and protected goals)
-   - Forks the three canonical futures for that decision
-   - Compares them
-   - Recommends the best choice
-
-3. **Inspect the Flight Recorder:** "Every tool invocation is recorded with its risk classification, arguments, and status. This is the agent's audit trail."
-
-4. **Make it your own decision:** In "Your Decision," replace the Tesla example — try "Take 3 months unpaid leave to write a novel," cost $15,000, click Update Decision. Watch all three futures rebuild around the new number, live, through `define_decision`.
-
-5. **Add a goal only you would think to protect:** Under "What you don't want to jeopardize," add "Book advance fund" at $5,000. Every future recalculates against it immediately, in priority order alongside the others.
-
-6. **Fork a future of your own:** Click "Add your own future" and try a price/wait combination none of the three defaults cover — this calls the exact same `fork_scenario` tool the agent uses.
-
-7. **Explore a scenario:** Click "Explore" on any scenario. See the simulation of what your finances would look like.
-
-8. **Approve or reject a commitment:** Click "Commit" on a scenario. A modal opens requiring a freshly generated code to be typed back before Approve unlocks — explicit, verified human control, not just a click-through.
-
-9. **Reset:** Click "Reset Demo" to restore the Tesla example and clear the Flight Recorder.
-
 ## Key Features
 
 ✓ **User-defined decisions and goals** – `define_decision` and `set_protected_goal`/`remove_protected_goal` mean nothing about the scenario is hardcoded; the Tesla example is a starting point, not the product  
