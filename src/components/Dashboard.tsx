@@ -27,6 +27,7 @@ import {
   getToolPolicy,
 } from "@/lib/riskPolicy";
 import { isCommitScenarioResult } from "@/lib/toolResults";
+import { startProductTourOnFirstVisit } from "@/lib/productTour";
 import TopBar from "./TopBar";
 import FutureMap from "./FutureMap";
 import ProtectedGoalsStrip from "./ProtectedGoalsStrip";
@@ -716,9 +717,16 @@ export default function Dashboard() {
       }
     });
 
+    // A short delay so the first-visit tour opens onto a settled layout
+    // rather than mid-paint.
+    const tourTimer = setTimeout(() => {
+      if (!cancelled) startProductTourOnFirstVisit();
+    }, 600);
+
     return () => {
       cancelled = true;
       hasInitialized.current = false;
+      clearTimeout(tourTimer);
       void clientForCleanup?.unregisterAll();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -165,6 +165,72 @@ html {
   }
 }
 
+/* Guided tour (driver.js) — recolored from its default light theme to
+   match the app's night/gold palette. Selectors carry both classes so
+   they outrank driver.css's own same-specificity rules without !important. */
+.cf-tour-popover.driver-popover {
+  background-color: #17213a; /* night-700 */
+  color: #f5f7ff; /* frost */
+  border: 1px solid #26324d; /* night-600 */
+  border-radius: 14px;
+  box-shadow: 0px 16px 32px rgba(0, 0, 0, 0.5);
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+.cf-tour-popover .driver-popover-title {
+  color: #f5f7ff;
+  font-size: 15px;
+}
+.cf-tour-popover .driver-popover-description {
+  color: #8994ad; /* fog */
+  font-size: 13px;
+}
+.cf-tour-popover .driver-popover-close-btn {
+  color: #8994ad;
+}
+.cf-tour-popover .driver-popover-close-btn:hover,
+.cf-tour-popover .driver-popover-close-btn:focus {
+  color: #f5f7ff;
+}
+.cf-tour-popover .driver-popover-progress-text {
+  color: #8994ad;
+}
+.cf-tour-popover .driver-popover-footer-btn {
+  background-color: #26324d;
+  border: 1px solid #26324d;
+  color: #f5f7ff;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-family: inherit;
+}
+.cf-tour-popover .driver-popover-footer-btn:hover,
+.cf-tour-popover .driver-popover-footer-btn:focus {
+  background-color: #3d4353; /* night-500-ish hover */
+}
+.cf-tour-popover .driver-popover-footer-btn.driver-popover-next-btn,
+.cf-tour-popover .driver-popover-footer-btn.driver-popover-done-btn {
+  background-color: #f6c85f; /* gold */
+  border-color: #f6c85f;
+  color: #070b17; /* night-950 */
+  font-weight: 500;
+}
+.cf-tour-popover .driver-popover-footer-btn.driver-popover-next-btn:hover,
+.cf-tour-popover .driver-popover-footer-btn.driver-popover-done-btn:hover {
+  opacity: 0.9;
+  background-color: #f6c85f;
+}
+.cf-tour-popover .driver-popover-arrow-side-left {
+  border-right-color: #17213a;
+}
+.cf-tour-popover .driver-popover-arrow-side-right {
+  border-left-color: #17213a;
+}
+.cf-tour-popover .driver-popover-arrow-side-top {
+  border-bottom-color: #17213a;
+}
+.cf-tour-popover .driver-popover-arrow-side-bottom {
+  border-top-color: #17213a;
+}
+
 /* Input focus styles */
 input:focus {
   @apply outline-none ring-2 ring-indigo-400 ring-opacity-60;

@@ -23,7 +23,10 @@ export default function ProtectedGoalsStrip({
   onOpenSetup,
 }: ProtectedGoalsStripProps) {
   return (
-    <footer className="flex h-20 shrink-0 items-center justify-between border-t border-night-600 bg-night-900 px-7">
+    <footer
+      data-tour="protected-goals"
+      className="flex h-20 shrink-0 items-center justify-between border-t border-night-600 bg-night-900 px-7"
+    >
       <div className="flex min-w-0 items-center gap-2.5">
         <span className="shrink-0 text-xs font-bold tracking-wide text-fog">
           PROTECTED GOALS

@@ -44,6 +44,7 @@ export default function DestinationCard({
       onClick={() => onExplore(scenario.id)}
       title="Log an exploration of this future"
       data-no-pan
+      data-tour="destination-card"
       className={`relative flex w-[238px] cursor-pointer flex-col items-start gap-2.5 rounded-[18px] bg-night-800 p-4 transition-transform hover:-translate-y-0.5 ${
         emphasized
           ? "border-2 shadow-[0px_0px_9px_rgba(246,200,95,0.33)]"
@@ -57,7 +58,10 @@ export default function DestinationCard({
         </span>
       ) : (
         isRecommended && (
-          <span className="absolute -top-[11px] left-3.5 rounded-full bg-gold px-2.5 py-[5px] text-[10px] font-extrabold text-night-950">
+          <span
+            data-tour="recommended-flag"
+            className="absolute -top-[11px] left-3.5 rounded-full bg-gold px-2.5 py-[5px] text-[10px] font-extrabold text-night-950"
+          >
             ★ RECOMMENDED
           </span>
         )

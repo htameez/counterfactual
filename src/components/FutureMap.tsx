@@ -517,6 +517,7 @@ export default function FutureMap({
             measured (outer) box never moves — routes anchor to it. */}
         <div
           ref={todayRef}
+          data-tour="today-node"
           className="absolute left-[50px] top-1/2 z-10 w-[132px] -translate-y-1/2"
         >
           <div className="animate-pop-in rounded-[18px] border-2 border-white bg-night-700 p-3.5">
@@ -699,6 +700,7 @@ export default function FutureMap({
           <button
             onClick={() => setForkOpen((v) => !v)}
             data-no-pan
+            data-tour="fork-future"
             className="animate-fade-in absolute bottom-[92px] left-1/2 z-20 -translate-x-1/2 text-sm text-fog transition-colors hover:text-frost"
             style={{ animationDelay: "1.6s" }}
           >
@@ -728,6 +730,7 @@ export default function FutureMap({
       {scenarios.length > 0 && (
         <div
           data-no-pan
+          data-tour="zoom-controls"
           className="absolute bottom-[52px] left-7 z-30 flex items-center gap-0.5 rounded-xl border border-night-600 bg-night-800/90 p-1 backdrop-blur-sm"
         >
           <button
