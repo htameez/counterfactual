@@ -18,6 +18,7 @@ import {
   buildScenarioConfigs,
   calculateScenario,
   defaultAlternativeCost,
+  isDecisionDefined,
 } from "@/lib/financialCalculations";
 import { WebMCPClient } from "@/lib/webmcp";
 import {
@@ -26,13 +27,12 @@ import {
   getToolPolicy,
 } from "@/lib/riskPolicy";
 import { isCommitScenarioResult } from "@/lib/toolResults";
-import FinancialStatePanel from "./FinancialStatePanel";
-import DecisionPanel from "./DecisionPanel";
-import ScenarioComparison from "./ScenarioComparison";
-import FlightRecorder from "./FlightRecorder";
-import ConfirmationModal from "./ConfirmationModal";
-import WebMCPStatus from "./WebMCPStatus";
-import AgentControls from "./AgentControls";
+import TopBar from "./TopBar";
+import FutureMap from "./FutureMap";
+import ProtectedGoalsStrip from "./ProtectedGoalsStrip";
+import ApprovalSheet from "./ApprovalSheet";
+import ActivityDrawer from "./ActivityDrawer";
+import SetupDrawer from "./SetupDrawer";
 
 type ToolOrigin = "user" | "agent";
 type ToolHandler = (args: unknown, options?: { signal?: AbortSignal }) => Promise<unknown>;
@@ -56,6 +56,8 @@ export default function Dashboard() {
   const [recommendedScenario, setRecommendedScenario] = useState<string | null>(null);
   const [committedScenarioId, setCommittedScenarioId] = useState<string | null>(null);
   const [discoveredTools, setDiscoveredTools] = useState<WebMCPTool[]>([]);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
 
   // Tool handlers are registered once and must always see the *current*
   // state, not the values captured at registration time — refs give the
@@ -122,6 +124,14 @@ export default function Dashboard() {
       waitMonths: number,
       alternativeCost: number
     ) => {
+      // A clear canvas until there's an actual decision to fork: no routes,
+      // no recommendation, nothing committed.
+      if (!isDecisionDefined(activeDecision)) {
+        setScenarios([]);
+        setRecommendedScenario(null);
+        setCommittedScenarioId(null);
+        return;
+      }
       const rebuilt = buildScenarioConfigs(
         activeDecision,
         waitMonths,
@@ -382,6 +392,7 @@ export default function Dashboard() {
       compare_scenarios: async () => {
         const currentScenarios = scenariosRef.current;
         if (currentScenarios.length === 0) {
+          setRecommendedScenario(null);
           return { recommended: null, all: [] };
         }
 
@@ -398,6 +409,14 @@ export default function Dashboard() {
         });
 
         const recommended = scored.sort((a, b) => b.score - a.score)[0];
+
+        // The recommendation drives UI, not just data handed back to
+        // whoever called this tool (the gold "Recommended" flag on a
+        // destination card) — so the handler updates it directly. That way
+        // an external agent calling compare_scenarios through WebMCP gets
+        // the same visual feedback as the in-app "Explore futures" button,
+        // instead of that update being special-cased to one caller.
+        setRecommendedScenario(recommended?.scenario.id ?? null);
 
         return {
           recommended: recommended?.scenario || null,
@@ -479,6 +498,14 @@ export default function Dashboard() {
   const runAgentAnalysis = useCallback(async () => {
     if (!webmcpClient) return;
 
+    // Nothing to explore until a decision exists — send the user to the
+    // setup drawer instead of forking futures for a nameless $0 decision.
+    if (!isDecisionDefined(decisionRef.current)) {
+      setActivityOpen(false);
+      setSetupOpen(true);
+      return;
+    }
+
     setIsAgentRunning(true);
     setFlightLog([]);
 
@@ -514,18 +541,16 @@ export default function Dashboard() {
         );
       }
 
-      // Step 6: Compare scenarios
+      // Step 6: Compare scenarios — the handler itself updates
+      // recommendedScenario, so there's nothing left to do with the result
+      // here beyond letting it land in the Flight Recorder.
       await new Promise((r) => setTimeout(r, 500));
-      const comparison = (await executeToolWithRecorder(
+      await executeToolWithRecorder(
         "compare_scenarios",
         {},
         "agent",
         toolHandlersRef.current.compare_scenarios
-      )) as { recommended?: Scenario };
-
-      if (comparison && comparison.recommended) {
-        setRecommendedScenario(comparison.recommended.id);
-      }
+      );
     } catch (error) {
       console.error("Agent analysis error:", error);
     } finally {
@@ -761,87 +786,94 @@ export default function Dashboard() {
     setPendingApproval(null);
   }, [pendingApproval, updateFlightLogEntry]);
 
-  return (
-    <div className="flex h-screen flex-col bg-ink-950 text-ink-100">
-      {/* Header */}
-      <div className="border-b border-ink-700 bg-ink-900 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-2xl font-bold tracking-tight text-ink-50">
-                Counterfactual
-              </h1>
-              <span className="rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-0.5 text-[11px] font-medium text-indigo-300">
-                Life Roadmap
-              </span>
-            </div>
-            <p className="mt-0.5 text-sm text-ink-400">
-              Define your own decision, fork it into parallel futures,
-              compare them side by side, and decide together with an agent —
-              before anything is committed.
-            </p>
-          </div>
-          <WebMCPStatus contextType={webmcpClient?.getContextType() || "unavailable"} />
-        </div>
-      </div>
+  const referenceScenario =
+    scenarios.find((s) => s.id === committedScenarioId) ??
+    scenarios.find((s) => s.id === recommendedScenario) ??
+    null;
 
-      {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Panel - Financial State & Scenarios */}
-        <div className="flex flex-1 flex-col overflow-auto border-r border-ink-700 bg-board bg-fixed bg-[length:22px_22px]">
-          <FinancialStatePanel
-            state={financialState}
-            onUpdate={(field, value) => {
+  return (
+    <div className="flex h-screen flex-col bg-night-950 text-frost">
+      <TopBar
+        decision={decision}
+        hasDecision={isDecisionDefined(decision)}
+        isAgentRunning={isAgentRunning}
+        canExplore={webmcpClient !== null}
+        onEditDecision={() => {
+          setSetupOpen((v) => !v);
+          setActivityOpen(false);
+        }}
+        onToggleActivity={() => {
+          setActivityOpen((v) => !v);
+          setSetupOpen(false);
+        }}
+        onExplore={runAgentAnalysis}
+      />
+
+      {/* Future map + overlays */}
+      <div className="relative flex flex-1 overflow-hidden">
+        <FutureMap
+          scenarios={scenarios}
+          recommendedId={recommendedScenario}
+          committedId={committedScenarioId}
+          currentCash={financialState.cashSavings}
+          financialState={financialState}
+          hasDecision={isDecisionDefined(decision)}
+          onChoose={handleCommitScenario}
+          onExplore={handleSimulateScenario}
+          onForkCustom={handleForkCustomScenario}
+          onConfigure={() => {
+            setActivityOpen(false);
+            setSetupOpen(true);
+          }}
+        />
+
+        {pendingApproval && (
+          <ApprovalSheet
+            entry={pendingApproval}
+            onApprove={handleApprove}
+            onReject={handleReject}
+          />
+        )}
+
+        {activityOpen && (
+          <ActivityDrawer
+            entries={flightLog}
+            tools={discoveredTools}
+            scenarios={scenarios}
+            contextType={webmcpClient?.getContextType() || "unavailable"}
+            onInvoke={handleManualInvoke}
+            onReset={handleReset}
+            onClose={() => setActivityOpen(false)}
+          />
+        )}
+
+        {setupOpen && (
+          <SetupDrawer
+            financialState={financialState}
+            decision={decision}
+            protectedGoals={protectedGoals}
+            onUpdateFinancialState={(field, value) => {
               const updated = { ...financialState, [field]: value };
               setFinancialState(updated);
               refreshAllScenarios(updated, protectedGoals);
             }}
-          />
-
-          <DecisionPanel
-            decision={decision}
-            protectedGoals={protectedGoals}
             onDefineDecision={handleDefineDecision}
             onSetGoal={handleSetProtectedGoal}
             onRemoveGoal={handleRemoveProtectedGoal}
+            onClose={() => setSetupOpen(false)}
           />
-
-          <ScenarioComparison
-            scenarios={scenarios}
-            recommendedId={recommendedScenario}
-            committedId={committedScenarioId}
-            currentCash={financialState.cashSavings}
-            onSimulate={handleSimulateScenario}
-            onCommit={handleCommitScenario}
-            onForkCustom={handleForkCustomScenario}
-          />
-
-          <AgentControls
-            isRunning={isAgentRunning}
-            onRunAgent={runAgentAnalysis}
-            onReset={handleReset}
-          />
-        </div>
-
-        {/* Right Panel - Flight Recorder */}
-        <div className="flex w-96 flex-col overflow-hidden border-l border-ink-700 bg-ink-900">
-          <FlightRecorder
-            entries={flightLog}
-            tools={discoveredTools}
-            scenarios={scenarios}
-            onInvoke={handleManualInvoke}
-          />
-        </div>
+        )}
       </div>
 
-      {/* Confirmation Modal */}
-      {pendingApproval && (
-        <ConfirmationModal
-          entry={pendingApproval}
-          onApprove={handleApprove}
-          onReject={handleReject}
-        />
-      )}
+      <ProtectedGoalsStrip
+        goals={protectedGoals}
+        financialState={financialState}
+        referenceScenario={referenceScenario}
+        onOpenSetup={() => {
+          setSetupOpen(true);
+          setActivityOpen(false);
+        }}
+      />
     </div>
   );
 }

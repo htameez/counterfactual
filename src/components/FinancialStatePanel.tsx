@@ -52,25 +52,23 @@ export default function FinancialStatePanel({
   };
 
   return (
-    <div className="border-b border-ink-700 bg-ink-900/60 p-6">
+    <div className="border-b border-night-600 p-6">
       <div className="mb-4 flex items-center gap-2">
-        <Wallet className="h-4 w-4 text-indigo-400" />
-        <h2 className="text-lg font-semibold text-ink-50">
-          Where You Stand Today
-        </h2>
+        <Wallet className="h-4 w-4 text-gold" />
+        <h2 className="text-lg font-bold text-frost">Where You Stand Today</h2>
       </div>
 
       {/* Quick Summary */}
-      <div className="mb-6 grid grid-cols-2 gap-4 rounded-lg border border-ink-700 bg-ink-850 p-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 rounded-[18px] border border-night-600 bg-night-800 p-4">
         <div>
-          <p className="text-xs text-ink-400">Current cash</p>
-          <p className="text-xl font-bold text-ink-50">
+          <p className="text-xs text-fog">Current cash</p>
+          <p className="font-mono text-xl font-bold text-frost">
             {formatCurrency(state.cashSavings)}
           </p>
         </div>
         <div>
-          <p className="text-xs text-ink-400">Monthly savings</p>
-          <p className="text-xl font-bold text-emerald-400">
+          <p className="text-xs text-fog">Monthly savings</p>
+          <p className="font-mono text-xl font-bold text-aqua">
             {formatCurrency(state.monthlySavingsContribution)}
           </p>
         </div>
@@ -81,10 +79,10 @@ export default function FinancialStatePanel({
         {(Object.keys(state) as Array<keyof FinancialState>).map((field) => (
           <div key={field} className="flex items-center justify-between gap-3">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-ink-200">
+              <label className="block text-sm font-medium text-frost">
                 {FIELD_LABELS[field]}
               </label>
-              <p className="text-xs text-ink-500">{FIELD_DESCRIPTIONS[field]}</p>
+              <p className="text-xs text-fog">{FIELD_DESCRIPTIONS[field]}</p>
             </div>
             {editingField === field ? (
               <div className="flex gap-2">
@@ -92,20 +90,20 @@ export default function FinancialStatePanel({
                   type="number"
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
-                  className="w-32 rounded border border-ink-600 bg-ink-800 px-2 py-1 text-right text-sm text-ink-50 focus:border-indigo-400 focus:outline-none"
+                  className="w-32 rounded-lg border border-night-600 bg-night-700 px-2 py-1 text-right font-mono text-sm text-frost focus:border-gold focus:outline-none"
                   autoFocus
                   min="0"
                   step="100"
                 />
                 <button
                   onClick={() => handleSave(field)}
-                  className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500"
+                  className="rounded-lg bg-gold px-3 py-1 text-xs font-medium text-night-950 hover:opacity-90"
                 >
                   Save
                 </button>
                 <button
                   onClick={handleCancel}
-                  className="rounded bg-ink-700 px-3 py-1 text-xs font-medium text-ink-200 hover:bg-ink-600"
+                  className="rounded-lg border border-night-600 bg-night-700 px-3 py-1 text-xs font-medium text-frost hover:bg-night-600/60"
                 >
                   Cancel
                 </button>
@@ -113,7 +111,7 @@ export default function FinancialStatePanel({
             ) : (
               <button
                 onClick={() => handleEdit(field)}
-                className="shrink-0 rounded bg-ink-800 px-4 py-2 text-right text-sm font-semibold text-ink-100 hover:bg-ink-700"
+                className="shrink-0 rounded-lg bg-night-700 px-4 py-2 text-right font-mono text-sm font-semibold text-frost hover:bg-night-600/60"
               >
                 {formatCurrency(state[field])}
               </button>

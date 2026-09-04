@@ -9,6 +9,20 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Future-map palette (from the Counterfactual Figma design).
+        night: {
+          950: "#070b17", // app background
+          900: "#0b1122", // map background
+          800: "#11192d", // destination cards
+          700: "#17213a", // raised surfaces, buttons
+          600: "#26324d", // borders
+        },
+        fog: "#8994ad", // muted text
+        frost: "#f5f7ff", // primary text
+        gold: "#f6c85f", // accent / recommended route
+        aqua: "#35d0ba", // "do it now" route
+        violet: "#9478ff", // "cheaper alternative" route
+        coral: "#ff6278", // breach / danger
         // Board surfaces: the dark, gameboard-like ground the whole app sits on.
         ink: {
           50: "#f3f4f7",
@@ -62,7 +76,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["system-ui", "sans-serif"],
+        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        mono: ["var(--font-roboto-mono)", "ui-monospace", "monospace"],
       },
       backgroundImage: {
         board:

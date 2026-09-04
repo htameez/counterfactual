@@ -115,28 +115,28 @@ export default function ManualToolConsole({
   };
 
   return (
-    <div className="border-b border-ink-700 bg-ink-900">
+    <div className="border-b border-night-600">
       <button
         onClick={() => setExpanded((v) => !v)}
         className="flex w-full items-center justify-between px-4 py-3 text-left"
       >
         <div className="flex items-center gap-2">
-          <Terminal className="h-4 w-4 text-indigo-400" />
-          <span className="text-sm font-semibold text-ink-50">
+          <Terminal className="h-4 w-4 text-gold" />
+          <span className="text-sm font-bold text-frost">
             Manual Tool Console
           </span>
-          <span className="rounded-full bg-ink-800 px-2 py-0.5 text-[10px] font-medium text-ink-400">
+          <span className="rounded-full bg-night-700 px-2 py-0.5 text-[10px] font-medium text-fog">
             {tools.length} discovered
           </span>
         </div>
         <ChevronDown
-          className={`h-4 w-4 text-ink-400 transition-transform ${expanded ? "rotate-180" : ""}`}
+          className={`h-4 w-4 text-fog transition-transform ${expanded ? "rotate-180" : ""}`}
         />
       </button>
 
       {expanded && (
         <div className="space-y-2 px-4 pb-4">
-          <p className="text-xs text-ink-400">
+          <p className="text-xs text-fog">
             Invoke any tool yourself, exactly as the agent would — same
             handlers, same risk policy, same Flight Recorder trail.
           </p>
@@ -153,40 +153,40 @@ export default function ManualToolConsole({
             return (
               <div
                 key={tool.name}
-                className="rounded-lg border border-ink-700 bg-ink-850 overflow-hidden"
+                className="overflow-hidden rounded-xl border border-night-600 bg-night-800"
               >
                 <button
                   onClick={() => setOpenTool(isOpen ? null : tool.name)}
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-ink-800"
+                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-night-700"
                 >
                   <div className="flex min-w-0 items-center gap-2">
-                    <code className="truncate text-xs font-semibold text-ink-100">
+                    <code className="truncate font-mono text-xs font-semibold text-frost">
                       {tool.name}
                     </code>
                     {policy && (
                       <span
-                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${getRiskLevelBadgeClass(policy.riskLevel)}`}
+                        className={`shrink-0 rounded-lg px-1.5 py-0.5 text-[10px] font-medium ${getRiskLevelBadgeClass(policy.riskLevel)}`}
                       >
                         {policy.riskLevel}
                       </span>
                     )}
                   </div>
                   <ChevronDown
-                    className={`h-3.5 w-3.5 shrink-0 text-ink-500 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                    className={`h-3.5 w-3.5 shrink-0 text-fog transition-transform ${isOpen ? "rotate-180" : ""}`}
                   />
                 </button>
 
                 {isOpen && (
-                  <div className="space-y-3 border-t border-ink-700 px-3 py-3">
+                  <div className="space-y-3 border-t border-night-600 px-3 py-3">
                     {policy?.requiresConfirmation && (
-                      <p className="flex items-center gap-1.5 text-[11px] text-amber-300">
+                      <p className="flex items-center gap-1.5 text-[11px] text-gold">
                         <Sparkles className="h-3 w-3" />
                         Requires your explicit approval before it executes.
                       </p>
                     )}
 
                     {fields.length === 0 ? (
-                      <p className="text-xs text-ink-500">No input required.</p>
+                      <p className="text-xs text-fog">No input required.</p>
                     ) : (
                       <div className="space-y-2">
                         {fields.map(([field, schema]) => {
@@ -196,10 +196,10 @@ export default function ManualToolConsole({
 
                           return (
                             <label key={field} className="block">
-                              <span className="mb-1 block text-[11px] font-medium text-ink-300">
+                              <span className="mb-1 block text-[11px] font-medium text-fog">
                                 {field}
                                 {required.includes(field) && (
-                                  <span className="text-red-400"> *</span>
+                                  <span className="text-coral"> *</span>
                                 )}
                               </span>
 
@@ -209,7 +209,7 @@ export default function ManualToolConsole({
                                   onChange={(e) =>
                                     setFieldValue(tool.name, field, e.target.value)
                                   }
-                                  className="w-full rounded border border-ink-600 bg-ink-800 px-2 py-1.5 text-xs text-ink-50 focus:border-indigo-400 focus:outline-none"
+                                  className="w-full rounded-lg border border-night-600 bg-night-700 px-2 py-1.5 text-xs text-frost focus:border-gold focus:outline-none"
                                 >
                                   <option value="">Select a scenario…</option>
                                   {scenarios.map((s) => (
@@ -224,7 +224,7 @@ export default function ManualToolConsole({
                                   onChange={(e) =>
                                     setFieldValue(tool.name, field, e.target.value)
                                   }
-                                  className="w-full rounded border border-ink-600 bg-ink-800 px-2 py-1.5 text-xs text-ink-50 focus:border-indigo-400 focus:outline-none"
+                                  className="w-full rounded-lg border border-night-600 bg-night-700 px-2 py-1.5 text-xs text-frost focus:border-gold focus:outline-none"
                                 >
                                   <option value="">Select…</option>
                                   {schema.enum.map((option) => (
@@ -242,7 +242,7 @@ export default function ManualToolConsole({
                                   }
                                   min={schema.minimum}
                                   placeholder={schema.description}
-                                  className="w-full rounded border border-ink-600 bg-ink-800 px-2 py-1.5 text-xs text-ink-50 placeholder:text-ink-500 focus:border-indigo-400 focus:outline-none"
+                                  className="w-full rounded-lg border border-night-600 bg-night-700 px-2 py-1.5 text-xs text-frost placeholder:text-fog focus:border-gold focus:outline-none"
                                 />
                               )}
                             </label>
@@ -252,7 +252,7 @@ export default function ManualToolConsole({
                     )}
 
                     {feedback[tool.name] && (
-                      <p className="text-[11px] text-ink-300">
+                      <p className="text-[11px] text-fog">
                         {feedback[tool.name]}
                       </p>
                     )}
@@ -260,7 +260,7 @@ export default function ManualToolConsole({
                     <button
                       onClick={() => handleInvoke(tool)}
                       disabled={invoking === tool.name}
-                      className="w-full rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-ink-400"
+                      className="w-full rounded-lg bg-gold px-3 py-1.5 text-xs font-medium text-night-950 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:bg-night-700 disabled:text-fog"
                     >
                       {invoking === tool.name ? "Invoking…" : `Invoke ${tool.name}`}
                     </button>

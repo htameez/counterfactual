@@ -6,27 +6,28 @@ import type {
   Scenario,
 } from "@/types";
 
+// The app opens as a clear canvas: no finances, no decision, no goals —
+// everything on the map comes from what the user (or the agent, via tools)
+// actually configures.
 export const DEFAULT_FINANCIAL_STATE: FinancialState = {
-  cashSavings: 72000,
-  monthlyTakeHome: 6000,
-  monthlyLivingExpenses: 3200,
-  monthlySavingsContribution: 2800,
+  cashSavings: 0,
+  monthlyTakeHome: 0,
+  monthlyLivingExpenses: 0,
+  monthlySavingsContribution: 0,
 };
 
-// A starting example, not a fixed scenario — define_decision replaces this
-// entirely, and everything downstream (scenarios, goal checks, the prompt
-// quote) is computed from whatever decision is active.
 export const DEFAULT_DECISION: Decision = {
-  name: "Buy a Tesla Model 3 in cash",
-  description: "All-in purchase price, including taxes and fees.",
-  baseCost: 44000,
+  name: "",
+  description: "",
+  baseCost: 0,
 };
 
-export const DEFAULT_PROTECTED_GOALS: ProtectedGoal[] = [
-  { id: "goal-emergency", name: "Emergency fund", targetAmount: 19200 },
-  { id: "goal-school", name: "Graduate school reserve", targetAmount: 18000 },
-  { id: "goal-move", name: "Austin moving fund", targetAmount: 6000 },
-];
+export const DEFAULT_PROTECTED_GOALS: ProtectedGoal[] = [];
+
+/** No futures can be forked until the user has named a costed decision. */
+export function isDecisionDefined(decision: Decision): boolean {
+  return decision.name.trim().length > 0 && decision.baseCost > 0;
+}
 
 export const DEFAULT_SCENARIO_WAIT_MONTHS = 8;
 // Default "cheaper alternative" price when a new decision is defined —
@@ -148,6 +149,42 @@ function generateExplanation(
   }
 
   return `${timing} covers the cost but puts ${compromised.join(", ")} below target.`;
+}
+
+// Shared horizon for the future map's destination cards, so every card's
+// headline number answers the same question: "where does this path leave
+// me after N months?"
+export const PROJECTION_HORIZON_MONTHS = 24;
+
+export function projectedSavings(
+  scenario: Pick<Scenario, "cashAfterPurchase" | "waitMonths">,
+  state: FinancialState,
+  horizonMonths: number = PROJECTION_HORIZON_MONTHS
+): number {
+  const monthsAfterPurchase = Math.max(horizonMonths - scenario.waitMonths, 0);
+  return (
+    scenario.cashAfterPurchase +
+    state.monthlySavingsContribution * monthsAfterPurchase
+  );
+}
+
+/**
+ * Months of saving needed after the purchase before every protected goal
+ * is covered again. 0 means the buffer never dips below the goals; null
+ * means it never recovers (no monthly savings to rebuild with).
+ */
+export function monthsToRebuild(
+  scenario: Pick<Scenario, "cashAfterPurchase" | "goalStatuses">,
+  state: FinancialState
+): number | null {
+  const totalTargets = scenario.goalStatuses.reduce(
+    (sum, g) => sum + g.targetAmount,
+    0
+  );
+  const deficit = totalTargets - scenario.cashAfterPurchase;
+  if (deficit <= 0) return 0;
+  if (state.monthlySavingsContribution <= 0) return null;
+  return Math.ceil(deficit / state.monthlySavingsContribution);
 }
 
 export function formatCurrency(value: number): string {

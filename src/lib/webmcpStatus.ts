@@ -13,24 +13,24 @@ export function getWebMCPStatusText(contextType: WebMCPContextType): string {
 
 export function getWebMCPStatusColor(contextType: WebMCPContextType): string {
   const colorMap: Record<WebMCPContextType, string> = {
-    native: "text-emerald-300 bg-emerald-500/10",
-    polyfilled: "text-emerald-300 bg-emerald-500/10",
-    legacy: "text-amber-300 bg-amber-500/10",
-    "demo-bridge": "text-indigo-300 bg-indigo-500/10",
-    unavailable: "text-ink-300 bg-ink-500/10",
+    native: "text-aqua bg-aqua/10",
+    polyfilled: "text-aqua bg-aqua/10",
+    legacy: "text-gold bg-gold/10",
+    "demo-bridge": "text-violet bg-violet/10",
+    unavailable: "text-fog bg-night-600/20",
   };
-  return colorMap[contextType] || "text-ink-300 bg-ink-500/10";
+  return colorMap[contextType] || "text-fog bg-night-600/20";
 }
 
 export function getWebMCPStatusDotClass(contextType: WebMCPContextType): string {
   const dotMap: Record<WebMCPContextType, string> = {
-    native: "bg-emerald-400",
-    polyfilled: "bg-emerald-400",
-    legacy: "bg-amber-400",
-    "demo-bridge": "bg-indigo-400",
-    unavailable: "bg-ink-400",
+    native: "bg-aqua",
+    polyfilled: "bg-aqua",
+    legacy: "bg-gold",
+    "demo-bridge": "bg-violet",
+    unavailable: "bg-fog",
   };
-  return dotMap[contextType] || "bg-ink-400";
+  return dotMap[contextType] || "bg-fog";
 }
 
 export function getWebMCPStatusDescription(contextType: WebMCPContextType): string {

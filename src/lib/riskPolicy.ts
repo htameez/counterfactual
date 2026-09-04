@@ -303,23 +303,23 @@ export function getRiskLevelColor(riskLevel: RiskLevel): string {
 
 export function getRiskLevelBadgeClass(riskLevel: RiskLevel): string {
   const classes: Record<RiskLevel, string> = {
-    "read-only": "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30",
-    simulation: "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30",
-    reversible: "bg-amber-500/15 text-amber-300 border border-amber-500/30",
-    "external-commitment": "bg-red-500/15 text-red-300 border border-red-500/30",
-    destructive: "bg-red-500/25 text-red-200 border border-red-500/50",
+    "read-only": "bg-aqua/15 text-aqua border border-aqua/30",
+    simulation: "bg-violet/15 text-violet border border-violet/30",
+    reversible: "bg-gold/15 text-gold border border-gold/30",
+    "external-commitment": "bg-coral/15 text-coral border border-coral/30",
+    destructive: "bg-coral/25 text-coral border border-coral/50",
   };
-  return classes[riskLevel] || "bg-ink-500/15 text-ink-300 border border-ink-500/30";
+  return classes[riskLevel] || "bg-night-600/30 text-fog border border-night-600";
 }
 
 /** A solid dot color for compact risk indicators (timelines, legends). */
 export function getRiskLevelDotClass(riskLevel: RiskLevel): string {
   const classes: Record<RiskLevel, string> = {
-    "read-only": "bg-emerald-400",
-    simulation: "bg-indigo-400",
-    reversible: "bg-amber-400",
-    "external-commitment": "bg-red-400",
-    destructive: "bg-red-500",
+    "read-only": "bg-aqua",
+    simulation: "bg-violet",
+    reversible: "bg-gold",
+    "external-commitment": "bg-coral",
+    destructive: "bg-coral",
   };
-  return classes[riskLevel] || "bg-ink-400";
+  return classes[riskLevel] || "bg-fog";
 }

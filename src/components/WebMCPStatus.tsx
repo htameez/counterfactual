@@ -19,11 +19,11 @@ export default function WebMCPStatus({ contextType }: WebMCPStatusProps) {
   const dotClass = getWebMCPStatusDotClass(contextType);
 
   return (
-    <div className={`flex items-center gap-2.5 rounded-lg border border-ink-700 px-4 py-2 ${statusColor}`}>
+    <div className={`flex max-w-[240px] items-center gap-2.5 rounded-xl border border-night-600 px-3 py-2 ${statusColor}`}>
       <span className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`} />
       <div>
-        <p className="text-xs font-semibold text-ink-50">{statusText}</p>
-        <p className="text-xs text-ink-400">{statusDescription}</p>
+        <p className="text-xs font-semibold text-frost">{statusText}</p>
+        <p className="text-xs text-fog">{statusDescription}</p>
       </div>
     </div>
   );
