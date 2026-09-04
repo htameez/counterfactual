@@ -28,6 +28,26 @@ if (typeof document !== "undefined") {
     console.warn("Failed to initialize @mcp-b/webmcp-polyfill:", error);
   }
   installedByUs = !existedBefore && Boolean(document.modelContext);
+
+  // Compatibility shim, not a spec requirement: document.modelContext is
+  // the current surface, but some agent tooling still only checks
+  // navigator.modelContext from an earlier WebMCP draft. Mirror ours
+  // there too, as the SAME object reference — so a tool registered later
+  // via document.modelContext stays visible through navigator.modelContext
+  // automatically, no separate sync needed — but only when nothing else
+  // is already there. Never clobber a real implementation (native or a
+  // different polyfill) that put itself on navigator on its own.
+  if (
+    document.modelContext &&
+    typeof navigator !== "undefined" &&
+    !navigator.modelContext
+  ) {
+    try {
+      navigator.modelContext = document.modelContext;
+    } catch (error) {
+      console.warn("Failed to mirror modelContext onto navigator:", error);
+    }
+  }
 }
 
 export function wasWebMCPPolyfillInstalledByUs(): boolean {
