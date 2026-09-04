@@ -409,7 +409,28 @@ export default function Dashboard() {
           return { scenario: s, score: goalScore + riskScore };
         });
 
-        const recommended = scored.sort((a, b) => b.score - a.score)[0];
+        // goalScore/riskScore alone tie constantly — e.g. with no
+        // protected goals set, or whenever every scenario preserves the
+        // same ones, every option scores identically. A plain sort then
+        // falls back to array order, which always favors "Do It Now" (it's
+        // first out of buildScenarioConfigs) even when waiting leaves a
+        // real cash cushion in the meantime.
+        //
+        // Break ties on cashAfterPurchase, not a longer-horizon projection:
+        // in this app's simple no-interest model, projecting every scenario
+        // out to the same future date (e.g. 24 months) washes the timing
+        // difference out entirely — a $10k purchase made today vs. in 8
+        // months lands on the exact same balance by month 24, since the
+        // model just adds back whatever was saved in between either way.
+        // cashAfterPurchase is the one figure that actually reflects "how
+        // much buffer do I have right after this," which is also exactly
+        // what goalScore itself is already built from (cashAfterPurchase
+        // vs. each goal's target) — so this tie-breaker is the same
+        // underlying signal, just used at finer resolution than pass/fail.
+        const recommended = [...scored].sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          return b.scenario.cashAfterPurchase - a.scenario.cashAfterPurchase;
+        })[0];
 
         // The recommendation drives UI, not just data handed back to
         // whoever called this tool (the gold "Recommended" flag on a
